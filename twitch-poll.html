@@ -1,0 +1,1512 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Голосование в чате Twitch</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600&family=Unbounded:wght@500;700&display=swap" rel="stylesheet">
+<script>
+  // Внутри приложения TwitchTTS страница включается как вкладка, отдельно - как обычный файл.
+  document.documentElement.setAttribute("data-mode", location.protocol === "file:" ? "file" : "app");
+</script>
+<style>
+  /* --- шапка приложения (стили повторяют style.css, чтобы страница была самодостаточной) --- */
+  .appbar { display: none; align-items: center; gap: 16px; padding: 10px 18px; background: var(--panel); border-bottom: 1px solid var(--line); }
+  .appbar h1 { font-size: 17px; margin: 0; font-weight: 650; }
+  .appbar nav { display: flex; gap: 6px; margin-left: 8px; }
+  .appbar nav a { padding: 6px 12px; border-radius: 8px; color: var(--muted); font-weight: 550; text-decoration: none; }
+  .appbar nav a.active, .appbar nav a:hover { background: var(--bg); color: var(--text); text-decoration: none; }
+  .appbar .pills { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; }
+  .appbar .pill { display: inline-flex; align-items: center; gap: 7px; padding: 5px 11px; border-radius: 999px; background: var(--bg); font-size: 13px; color: var(--muted); }
+  .appbar .pill::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none; }
+  .appbar .pill.good::before { background: var(--c2); }
+  .appbar .pill.bad::before { background: var(--danger); }
+  .appbar .pill.warn::before { background: var(--c1); }
+  html[data-mode="app"] .appbar { display: flex; }
+  html[data-mode="app"] .brand { display: none; }
+  html[data-mode="app"] .top { max-width: 1100px; margin: 0 auto; padding: 14px 20px 0; }
+  html[data-mode="app"] .tts-url-row { display: none; }
+  :root {
+    --bg: #171b28;
+    --panel: #20263a;
+    --line: #333b57;
+    --text: #eee9df;
+    --muted: #9aa1bb;
+    --c1: #ffb347;
+    --c2: #4fd1c1;
+    --c3: #b794ff;
+    --danger: #ff6b7a;
+    --font-body: "Onest", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --font-display: "Unbounded", "Onest", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: 16px;
+    line-height: 1.45;
+    min-height: 100vh;
+  }
+  .app {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 24px 20px 40px;
+    display: grid;
+    grid-template-columns: 340px 1fr;
+    gap: 24px;
+    align-items: start;
+  }
+  body.compact .left { display: none; }
+  body.compact .app { grid-template-columns: 1fr; max-width: 760px; }
+
+  .settings {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 20px;
+    display: grid;
+    gap: 18px;
+  }
+  h1 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 18px;
+    line-height: 1.25;
+    margin: 0;
+  }
+  label, .label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+  input[type="text"], input[type="number"] {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    color: var(--text);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font: inherit;
+  }
+  select {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    color: var(--text);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font: inherit;
+  }
+  input:focus-visible, button:focus-visible, select:focus-visible {
+    outline: 2px solid var(--c2);
+    outline-offset: 2px;
+  }
+  .tts-block { border-top: 1px solid var(--line); padding-top: 16px; margin-top: 2px; }
+  .tts-block .check { margin: 7px 0; }
+  .tts-block .status { margin-top: 4px; }
+  .tts-row { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
+  .tts-row > input, .tts-row > select { flex: 1; min-width: 0; }
+  .tts-row > button { flex: none; }
+  .tts-mini { border-top: 1px solid var(--line); padding-top: 14px; margin-top: 4px; }
+  .tts-mini .label { margin-bottom: 6px; }
+  .tts-mini-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 13px; color: var(--muted); }
+  .tts-mini-row button { flex: none; }
+  .voice-panel { display: none; max-width: 720px; margin: 0 auto 40px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 22px 24px; }
+  .voice-panel h2 { font-family: var(--font-display); font-weight: 700; font-size: 17px; margin: 0 0 14px; }
+  body.tab-voice .app { display: none; }
+  body.tab-voice .voice-panel { display: block; }
+  body.tab-poll .voice-panel, body.tab-chat .voice-panel { display: none; }
+  body.tab-chat .left, body.tab-chat .stage { display: none; }
+  body.tab-chat .app { grid-template-columns: 1fr; }
+  .chatgrid { display: grid; grid-template-columns: minmax(240px, 1fr) minmax(300px, 1.15fr); gap: 18px; align-items: start; }
+  .chat-embed { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--bg); }
+  .chat-embed iframe { display: block; width: 100%; height: min(640px, 72vh); border: 0; background: var(--bg); }
+  html[data-mode="file"] .chat-embed { display: none; }
+  html[data-mode="file"] .chatgrid { grid-template-columns: 1fr; }
+  @media (max-width: 980px) { .chatgrid { grid-template-columns: 1fr; } }
+  .row { display: flex; gap: 8px; }
+  .row > * { flex: 1; }
+  .opt { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .opt .dot {
+    flex: none;
+    width: 30px; height: 30px;
+    border-radius: 50%;
+    display: grid; place-items: center;
+    font-family: var(--font-display);
+    font-weight: 700; font-size: 14px;
+    color: #11141f;
+  }
+  .opt:nth-of-type(1) .dot { background: var(--c1); }
+  .opt:nth-of-type(2) .dot { background: var(--c2); }
+  .opt:nth-of-type(3) .dot { background: var(--c3); }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .chip {
+    background: transparent;
+    border: 1px solid var(--line);
+    color: var(--muted);
+    border-radius: 999px;
+    padding: 4px 12px;
+    font: inherit; font-size: 13px;
+    cursor: pointer;
+  }
+  .chip:hover { color: var(--text); border-color: var(--muted); }
+
+  .check { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--text); margin: 0; }
+  .check input { width: 18px; height: 18px; accent-color: var(--c2); }
+
+  button.main {
+    width: 100%;
+    border: 0;
+    border-radius: 10px;
+    padding: 13px 16px;
+    font: inherit; font-weight: 600; font-size: 16px;
+    cursor: pointer;
+    background: var(--c2);
+    color: #0f1a1a;
+  }
+  button.main:hover { filter: brightness(1.08); }
+  button.main.stop { background: var(--danger); color: #1b0b0e; }
+  button.main:disabled { opacity: .45; cursor: not-allowed; filter: none; }
+  button.ghost {
+    background: transparent; color: var(--muted);
+    border: 1px solid var(--line); border-radius: 8px;
+    padding: 8px 12px; font: inherit; font-size: 14px; cursor: pointer;
+  }
+  button.ghost:hover { color: var(--text); border-color: var(--muted); }
+
+  .status { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); margin-top: 8px; min-height: 22px; }
+  .status i { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); flex: none; }
+  .status.ok i { background: var(--c2); }
+  .status.wait i { background: var(--c1); }
+  .status.err i { background: var(--danger); }
+
+  .stage {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 28px 28px 24px;
+    min-height: 460px;
+  }
+  .head { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; flex-wrap: wrap; margin-bottom: 24px; }
+  .headline { font-size: 15px; color: var(--muted); max-width: 46ch; }
+  .headline b { color: var(--text); font-weight: 600; }
+  .timer {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 54px;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+  }
+  .timer.low { color: var(--danger); }
+  .timer.done { font-size: 26px; color: var(--muted); }
+
+  .bars { display: grid; gap: 16px; }
+  .bar { display: grid; grid-template-columns: 44px 1fr; gap: 14px; align-items: center; }
+  .bar .num {
+    width: 44px; height: 44px; border-radius: 50%;
+    display: grid; place-items: center;
+    font-family: var(--font-display); font-weight: 700; font-size: 20px;
+    color: #11141f;
+  }
+  .bar:nth-child(1) { --c: var(--c1); }
+  .bar:nth-child(2) { --c: var(--c2); }
+  .bar:nth-child(3) { --c: var(--c3); }
+  .bar .num { background: var(--c); }
+  .bar .top { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 6px; font-size: 18px; font-weight: 500; }
+  .bar .top .name { overflow-wrap: anywhere; }
+  .bar .top .val { color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .track { height: 18px; background: var(--bg); border-radius: 9px; overflow: hidden; }
+  .fill { height: 100%; width: 0; background: var(--c); border-radius: 9px; transition: width .3s ease; }
+  .bar.win .name::after { content: " — победил"; color: var(--c); font-weight: 600; }
+  .bar.dim { opacity: .55; }
+  .voters { display: flex; flex-wrap: wrap; gap: 4px 6px; margin-top: 8px; font-size: 13px; }
+  .voters:empty { display: none; }
+  .voters span { color: var(--c); border: 1px solid var(--line); border-radius: 999px; padding: 1px 9px; overflow-wrap: anywhere; }
+  .voters em { color: var(--muted); font-style: normal; padding: 1px 4px; }
+
+  .hint { margin: 26px 0 0; padding-top: 16px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; }
+  .feed { margin-top: 10px; font-size: 13px; color: var(--muted); min-height: 20px; overflow-wrap: anywhere; }
+  .tools { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 18px; }
+  .tools .label { margin: 0 4px 0 0; }
+
+  .top { max-width: 1100px; margin: 0 auto; padding: 20px 20px 0; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  .brand { font-family: var(--font-display); font-weight: 700; font-size: 16px; }
+  .tabs { display: flex; gap: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 4px; }
+  .tab { background: transparent; border: 0; color: var(--muted); font: inherit; font-weight: 600; padding: 9px 20px; border-radius: 9px; cursor: pointer; }
+  .tab:hover { color: var(--text); }
+  .tab.on { background: var(--c2); color: #0f1a1a; }
+  .tab:focus-visible { outline: 2px solid var(--c2); outline-offset: 2px; }
+  .settings h1 { display: none; }
+  a.vcount { color: var(--c2); text-decoration: none; }
+  a.vcount:hover { text-decoration: underline; }
+  body.tab-poll .viewers-panel, body.tab-poll .radar-panel, body.tab-poll .adv { display: none; }
+  body.tab-chat #compactBtn { display: none; }
+  .notice { background: #2b2a22; border: 1px solid var(--c1); border-radius: 10px; padding: 10px 12px; font-size: 13px; margin-bottom: 14px; }
+  body.hx .notice, body.tab-poll .notice, body.tab-radar .bans { display: none; }
+  .bans summary { cursor: pointer; font-size: 14px; }
+  .banrow { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 0; font-size: 14px; }
+  .voters button { background: none; border: 0; color: var(--muted); cursor: pointer; font: inherit; padding: 0 0 0 6px; }
+  .voters button:hover { color: var(--danger); }
+  .adv summary { cursor: pointer; font-size: 14px; }
+  .adv p { margin: 8px 0; }
+  .adv input { width: 100%; background: var(--bg); border: 1px solid var(--line); color: var(--text); border-radius: 8px; padding: 10px 12px; font: inherit; }
+  .left { display: grid; gap: 24px; min-width: 0; align-content: start; }
+  .viewers-panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 20px; }
+  .vcount { font-size: 13px; color: var(--muted); }
+  .vsum { font-size: 14px; margin: 0 0 14px; }
+  .vlist { display: grid; gap: 8px; max-height: 560px; overflow: auto; }
+  .vcard { border: 1px solid var(--line); border-radius: 10px; background: var(--bg); }
+  .vcard summary { display: flex; justify-content: space-between; gap: 10px; padding: 9px 12px; cursor: pointer; font-size: 14px; list-style: none; }
+  .vcard summary::-webkit-details-marker { display: none; }
+  .vcard .vname { font-weight: 600; overflow-wrap: anywhere; }
+  .vcard .vmeta { color: var(--muted); font-size: 13px; white-space: nowrap; }
+  .vcard[open] summary { border-bottom: 1px solid var(--line); }
+  .vchips { display: flex; gap: 6px; flex-wrap: wrap; padding: 8px 12px 0; }
+  .vchips:empty { display: none; }
+  .vchips span { font-size: 12px; border: 1px solid var(--line); border-radius: 999px; padding: 1px 9px; color: var(--c2); }
+  .vdesc { margin: 0; padding: 8px 12px 12px; font-size: 13px; }
+  .right { display: grid; gap: 24px; min-width: 0; }
+  .radar-panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 24px 28px 22px; }
+  .rhead { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
+  h2 { font-family: var(--font-display); font-weight: 700; font-size: 17px; margin: 0; }
+  .rstats { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 12px; }
+  .rstats b { display: block; font-family: var(--font-display); font-size: 26px; font-weight: 700; line-height: 1.15; font-variant-numeric: tabular-nums; }
+  .rstats span { font-size: 13px; color: var(--muted); }
+  .radarwrap { position: relative; display: flex; justify-content: center; margin: 20px 0 12px; }
+  #radar { display: block; border-radius: 50%; border: 1px solid var(--line); background: radial-gradient(circle, #1b2133 0%, #141826 100%); }
+  .tip { position: absolute; pointer-events: none; z-index: 5; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; font-size: 13px; white-space: pre; }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; justify-content: center; font-size: 13px; color: var(--muted); }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; box-sizing: content-box; }
+  .lists { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; margin-top: 22px; }
+  .lists h3 { font-size: 14px; font-weight: 600; margin: 0 0 8px; }
+  .lists ul { list-style: none; margin: 0; padding: 0; max-height: 260px; overflow: auto; font-size: 13px; border-top: 1px solid var(--line); }
+  .lists li { display: flex; justify-content: space-between; gap: 8px; padding: 5px 0; border-bottom: 1px solid var(--line); }
+  .lists li span:first-child { overflow-wrap: anywhere; }
+  .lists li span:last-child { color: var(--muted); white-space: nowrap; }
+  .lists li.chat span:first-child { color: var(--c1); }
+  .lists li.empty { color: var(--muted); }
+  @media (max-width: 860px) {
+    .lists { grid-template-columns: 1fr; }
+    .app { grid-template-columns: 1fr; }
+    .timer { font-size: 42px; }
+  }
+  @media (prefers-reduced-motion: reduce) { .fill { transition: none; } }
+</style>
+</head>
+<body class="tab-poll">
+<header class="appbar">
+  <h1>Озвучка чата</h1>
+  <nav>
+    <a href="/poll" class="active">Опрос</a>
+    <a href="/voices">Голоса</a>
+  </nav>
+  <div class="pills">
+    <span class="pill" id="pillEngine">Модель: загрузка…</span>
+    <span class="pill" id="pillTts">Опрос: озвучка выключена</span>
+  </div>
+</header>
+<header class="top">
+  <div class="brand">Twitch: голосования и радар</div>
+  <nav class="tabs" aria-label="Разделы">
+    <button class="tab on" data-tab="poll">Голосование</button>
+    <button class="tab" data-tab="chat">Чат</button>
+    <button class="tab" data-tab="voice">Озвучка</button>
+  </nav>
+</header>
+<div class="app">
+
+  <div class="left">
+  <section class="settings" aria-label="Настройки">
+    <h1>Голосование в чате Twitch</h1>
+
+    <div>
+      <label for="channel">Канал на Twitch</label>
+      <div class="row">
+        <input type="text" id="channel" placeholder="название_канала" autocomplete="off" spellcheck="false">
+        <button class="ghost" id="connectBtn" style="flex:none">Подключить</button>
+      </div>
+      <div class="status" id="status"><i></i><span>Не подключено</span></div>
+    </div>
+
+    <div>
+      <span class="label">Варианты</span>
+      <div class="opt"><span class="dot">1</span><input type="text" id="o1" placeholder="Вариант 1" maxlength="60"></div>
+      <div class="opt"><span class="dot">2</span><input type="text" id="o2" placeholder="Вариант 2" maxlength="60"></div>
+      <div class="opt"><span class="dot">3</span><input type="text" id="o3" placeholder="Вариант 3" maxlength="60"></div>
+    </div>
+
+    <div>
+      <span class="label">Время голосования</span>
+      <div class="row">
+        <div><input type="number" id="min" min="0" max="120" value="1" aria-label="Минуты"></div>
+        <div><input type="number" id="sec" min="0" max="59" value="0" aria-label="Секунды"></div>
+      </div>
+      <div class="label" style="margin:4px 0 0; display:flex; gap:8px"><span style="flex:1">минут</span><span style="flex:1">секунд</span></div>
+      <div class="chips">
+        <button class="chip" data-t="30">30 с</button>
+        <button class="chip" data-t="60">1 мин</button>
+        <button class="chip" data-t="120">2 мин</button>
+        <button class="chip" data-t="300">5 мин</button>
+        <button class="chip" data-t="600">10 мин</button>
+      </div>
+    </div>
+
+    <details class="bans">
+      <summary>Бан-лист (<span id="banCount">0</span>)</summary>
+      <div id="banList"></div>
+    </details>
+    <details class="adv" open>
+      <summary>Точный список зрителей (токен Twitch)</summary>
+      <p class="label">Без токена Twitch не показывает тех, кто в чате и молчит. Нужен токен владельца или модератора канала со scope moderator:read:chatters: получите его на twitchtokengenerator.com (Custom Scope Token). Данные хранятся только в этом браузере.</p>
+      <input type="text" id="cid" placeholder="Client ID" autocomplete="off" spellcheck="false">
+      <input type="password" id="tok" placeholder="Access Token" autocomplete="off" style="margin-top:8px">
+      <div class="status" id="hxStatus"><i></i><span>Не подключено</span></div>
+    </details>
+    <label class="check"><input type="checkbox" id="allowChange" checked> Зритель может изменить свой голос</label>
+
+    <div class="tts-mini">
+      <span class="label">Озвучка объявлений</span>
+      <div class="tts-mini-row">
+        <span id="ttsMiniState">проверка…</span>
+        <button class="ghost" id="ttsGo" type="button">Настроить</button>
+      </div>
+    </div>
+
+    <div>
+      <button class="main" id="startBtn">Начать голосование</button>
+    </div>
+
+    <button class="ghost" id="compactBtn">Скрыть настройки</button>
+  </section>
+
+  <section class="viewers-panel" aria-label="Сводка зрителей">
+    <div class="rhead"><h2>Сводка зрителей</h2><span class="vcount" id="vCount"></span><a class="vcount" id="lkLink" href="https://lurkology.com/logs" target="_blank" rel="noopener">Логи на Lurkology</a></div>
+    <div class="notice" id="hxNotice"><b>Сейчас виден не весь чат.</b> <span id="hxMsg">Без токена радар знает только тех, кто писал. Чтобы видеть всех, кто в чате сейчас, включая молчащих, вставьте Client ID и токен в настройках слева. Токен берут на twitchtokengenerator.com со scope moderator:read:chatters, он должен принадлежать владельцу канала или его модератору.</span></div>
+    <p class="vsum" id="vSum">Пока никого нет. Подключитесь к чату, и здесь появится сводка по зрителям.</p>
+    <div class="vlist" id="vList"></div>
+    <p class="hint">Описания составляются автоматически по активности в чате: время, число и стиль сообщений, голоса. История зрителей хранится только в этом браузере, тексты сообщений не сохраняются.</p>
+  </section>
+  </div>
+
+  <div class="right">
+  <section class="stage" aria-live="polite">
+    <div class="head">
+      <div class="headline" id="headline">Введите канал, подключитесь и запустите голосование.</div>
+      <div class="timer done" id="timer">—</div>
+    </div>
+
+    <div class="bars" id="bars"></div>
+
+    <p class="hint" id="hint">Зрители пишут в чат цифру <b>1</b>, <b>2</b> или <b>3</b>. Считаются только сообщения, где есть только эта цифра.</p>
+    
+
+    <div class="tools" id="tools">
+      <span class="label">Тест без чата:</span>
+      <button class="ghost" data-fake="1">+1 за вариант 1</button>
+      <button class="ghost" data-fake="2">+1 за вариант 2</button>
+      <button class="ghost" data-fake="3">+1 за вариант 3</button>
+    </div>
+  </section>
+
+  <section class="radar-panel" aria-label="Радар зрителей">
+    <div class="rhead">
+      <h2>Радар зала</h2><span class="vcount" id="rmode">по активности в чате (приблизительно)</span>
+      <label class="check"><input type="checkbox" id="hideBots" checked> Скрыть известных ботов</label>
+    </div>
+    <div class="rstats" id="rstats"></div>
+    <div class="chatgrid">
+      <div>
+        <div class="radarwrap" id="radarwrap">
+          <canvas id="radar" role="img" aria-label="Радар зрителей: чем ближе к центру, тем дольше человек в чате"></canvas>
+          <div class="tip" id="tip" hidden></div>
+        </div>
+        <div class="legend">
+          <span><i style="background:var(--c2)"></i>молчит в чате</span>
+          <span><i style="background:var(--c1)"></i>писал(а) в чат</span>
+          <span><i style="border:2px solid var(--danger)"></i>только что ушёл</span>
+        </div>
+      </div>
+      <div class="chat-embed">
+        <iframe id="chatFrame" src="/chat?embed=1" title="Чат Twitch" loading="lazy"></iframe>
+      </div>
+    </div>
+    <div class="lists">
+      
+      <div><h3>Пришли</h3><ul id="lJoin"></ul></div>
+      <div><h3>Ушли</h3><ul id="lPart"></ul></div>
+    </div>
+    <p class="hint">Чем ближе точка к центру, тем дольше человек в чате. Время считается с момента, когда вы подключились. Без токена радар видит только тех, кто писал: кто молчит 10 минут, считается ушедшим. С токеном (настройки слева) список точный, включая молчащих. Те, кто смотрит стрим и не открывал чат, не видны никому, кроме Twitch.</p>
+  </section>
+  </div>
+</div>
+
+<section class="voice-panel" id="voicePanel" aria-label="Озвучка объявлений">
+  <h2>Озвучка объявлений</h2>
+  <div class="status" id="ttsStatus"><i></i><span>Проверяю…</span></div>
+  <div class="tts-block" style="border-top:0; padding-top:14px; margin-top:10px">
+    <label class="check"><input type="checkbox" id="ttsOn"> Озвучивать голосование</label>
+    <label class="check"><input type="checkbox" id="ttsStart"> Озвучивать старт и варианты</label>
+    <label class="check"><input type="checkbox" id="ttsVote"> Озвучивать каждый голос (не чаще раза в 1,2 с)</label>
+    <label class="check"><input type="checkbox" id="ttsCount"> Считать вслух последние 10 секунд</label>
+    <label class="check"><input type="checkbox" id="ttsFinal"> Озвучивать итоги</label>
+    <div class="tts-row">
+      <select id="ttsVoice" aria-label="Голос объявлений"></select>
+    </div>
+    <div class="tts-row">
+      <input type="number" id="ttsVol" min="0" max="100" value="90" aria-label="Громкость, проценты">
+      <button class="ghost" id="ttsTest">Проверить звук</button>
+    </div>
+    <div class="tts-row tts-url-row">
+      <input type="text" id="ttsUrl" placeholder="http://127.0.0.1:8765" aria-label="Адрес TTS-сервера">
+    </div>
+    <p class="label" style="margin:8px 0 0">Текст озвучивает сервер TwitchTTS, звук играет в этой вкладке. Голос выбирается из списка голосов TTS. Если сервер не запущен - сообщения наград за баллы канала, команд и прочие настройки делаются на вкладке «Чат».</p>
+  </div>
+</section>
+
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+
+  // ---------- state ----------
+  var ws = null, wantConnected = false, reconnectTimer = null, channel = "";
+  var poll = { state: "idle", endsAt: 0, duration: 0, votes: new Map(), nicks: new Map(), recent: [] };
+  var fakeCounter = 0, lastErr = "";
+
+  // ---------- saved settings ----------
+  var KEYS = ["channel", "o1", "o2", "o3", "min", "sec", "cid", "tok"];
+  function save() {
+    try {
+      var s = {};
+      KEYS.forEach(function (k) { s[k] = $(k).value; });
+      s.allowChange = $("allowChange").checked;
+      localStorage.setItem("twitchPoll", JSON.stringify(s));
+    } catch (e) {}
+  }
+  function load() {
+    try {
+      var s = JSON.parse(localStorage.getItem("twitchPoll") || "null");
+      if (!s) return;
+      KEYS.forEach(function (k) { if (s[k] !== undefined) $(k).value = s[k]; });
+      if (s.allowChange !== undefined) $("allowChange").checked = s.allowChange;
+    } catch (e) {}
+  }
+  load();
+  document.querySelectorAll("input").forEach(function (el) { el.addEventListener("input", save); });
+  document.querySelectorAll("input[type=checkbox]").forEach(function (el) { el.addEventListener("change", save); });
+
+  // ---------- helpers ----------
+  function names() {
+    return [1, 2, 3].map(function (n) { return $("o" + n).value.trim() || ("Вариант " + n); });
+  }
+  function counts() {
+    var c = [0, 0, 0];
+    poll.votes.forEach(function (v) { c[v - 1]++; });
+    return c;
+  }
+  function fmt(sec) {
+    sec = Math.max(0, Math.ceil(sec));
+    var m = Math.floor(sec / 60), s = sec % 60;
+    return m + ":" + (s < 10 ? "0" : "") + s;
+  }
+  function plural(n, a, b, c) {
+    var m10 = n % 10, m100 = n % 100;
+    if (m10 === 1 && m100 !== 11) return a;
+    if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return b;
+    return c;
+  }
+  function setStatus(kind, text) {
+    var el = $("status");
+    el.className = "status " + kind;
+    el.querySelector("span").textContent = text;
+  }
+
+  // ---------- озвучка голосования (Twitch TTS) ----------
+  var TTS_KEY = "twitchPollTTS";
+  var ORD = ["первый", "второй", "третий"];
+  var countdownSaid = false;
+  var TTS = { ok: false, engine: "", device: "", voices: [], queue: [], playing: false, lastVote: 0, fallback: false };
+  function ttsBase() {
+    // внутри приложения работаем только с его собственным сервером
+    if (location.protocol !== "file:") return location.origin;
+    if (TTS.fallback) return "http://127.0.0.1:8765";
+    var v = $("ttsUrl").value.trim();
+    return (v || "http://127.0.0.1:8765").replace(/\/+$/, "");
+  }
+  function ttsCfg() {
+    try { return JSON.parse(localStorage.getItem(TTS_KEY) || "{}") || {}; } catch (e) { return {}; }
+  }
+  function ttsSave() {
+    try {
+      localStorage.setItem(TTS_KEY, JSON.stringify({
+        url: $("ttsUrl").value.trim(), voice: $("ttsVoice").value, vol: $("ttsVol").value,
+        on: $("ttsOn").checked, start: $("ttsStart").checked, vote: $("ttsVote").checked,
+        count: $("ttsCount").checked, final: $("ttsFinal").checked
+      }));
+    } catch (e) {}
+  }
+  function ttsStatus(kind, text) {
+    var el = $("ttsStatus");
+    el.className = "status " + kind;
+    el.querySelector("span").textContent = text;
+  }
+  function ttsApi(path, data) {
+    var ctl = (typeof AbortController !== "undefined") ? new AbortController() : null;
+    var timer = ctl ? setTimeout(function () { ctl.abort(); }, 15000) : null;
+    var opts = { method: data ? "POST" : "GET", headers: data ? { "Content-Type": "application/json" } : {} };
+    if (data) opts.body = JSON.stringify(data);
+    if (ctl) opts.signal = ctl.signal;
+    return fetch(ttsBase() + path, opts).then(function (r) {
+      if (timer) clearTimeout(timer);
+      return r.json();
+    }, function (e) {
+      if (timer) clearTimeout(timer);
+      throw e;
+    });
+  }
+  function ttsRefresh() {
+    return ttsApi("/api/state").then(function (r) {
+      if (!r || !r.ok) throw new Error("bad answer");
+      TTS.ok = true;
+      var en = (r.status || {}).engine || {};
+      TTS.engine = en.status || "";
+      TTS.device = en.device || "";
+      TTS.voices = (r.voices || []).filter(function (v) { return v.enabled !== false; });
+      ttsRenderVoices(r.settings || {});
+      if (TTS.engine === "ready") ttsStatus("ok", "Готово · " + (TTS.device || "модель загружена"));
+      else if (TTS.engine === "loading") ttsStatus("wait", "Модель озвучки загружается…");
+      else if (TTS.engine === "error") ttsStatus("err", "Ошибка модели: " + (en.error || "?"));
+      else ttsStatus("", "TTS отвечает");
+      ttsSummary();
+    }).catch(function () {
+      // сохранённый адрес не отвечает - пробуем стандартный порт
+      if (!TTS.fallback && location.protocol === "file:" && ttsBase() !== "http://127.0.0.1:8765") {
+        TTS.fallback = true;
+        ttsRefresh();
+        return;
+      }
+      TTS.ok = false;
+      ttsStatus("err", "TTS-сервер не отвечает. Запустите start.bat в папке TwitchTTS");
+      if (!TTS.voices.length) ttsRenderVoices({});
+      ttsSummary();
+    });
+  }
+  function ttsRenderVoices(settings) {
+    var sel = $("ttsVoice");
+    var cur = sel.value || ttsCfg().voice || "";
+    sel.textContent = "";
+    if (!TTS.voices.length) {
+      var o = document.createElement("option");
+      o.value = "";
+      o.textContent = !TTS.ok ? "сервер не отвечает" : TTS.engine === "ready" ? "нет голосов" : "модель загружается…";
+      sel.appendChild(o);
+      return;
+    }
+    [["Персонажи (RVC)", "rvc"], ["Свои голоса", "custom"], ["Стандартные", "standard"]].forEach(function (g) {
+      var list = TTS.voices.filter(function (v) { return v.kind === g[1]; });
+      if (!list.length) return;
+      var og = document.createElement("optgroup");
+      og.label = g[0];
+      list.forEach(function (v) {
+        var op = document.createElement("option");
+        op.value = v.id;
+        op.textContent = v.name;
+        og.appendChild(op);
+      });
+      sel.appendChild(og);
+    });
+    var want = cur || settings.default_voice || "";
+    if (want && TTS.voices.some(function (v) { return v.id === want; })) sel.value = want;
+  }
+  function ttsSay(text, prio, force) {
+    if (!text) return;
+    if (!force && !$("ttsOn").checked) return;
+    if (!TTS.ok) { ttsStatus("err", "TTS не отвечает — объявление пропущено"); return; }
+    if (!prio && Date.now() - TTS.lastVote < 1200) return;
+    if (!prio) { TTS.lastVote = Date.now(); if (TTS.queue.length > 3) return; }
+    TTS.queue.push({ text: text, prio: !!prio });
+    ttsPump();
+  }
+  function ttsPump() {
+    if (TTS.playing || !TTS.queue.length) return;
+    var job = TTS.queue.shift();
+    TTS.playing = true;
+    ttsApi("/api/announce", { text: job.text, voice: $("ttsVoice").value })
+      .then(function (r) {
+        if (!r || !r.ok) throw new Error((r && r.error) || "ошибка сервера");
+        var a = new Audio(ttsBase() + r.url);
+        a.volume = Math.max(0, Math.min(1, (parseInt($("ttsVol").value, 10) || 0) / 100));
+        return new Promise(function (resolve, reject) {
+          a.onended = function () { resolve(); };
+          a.onerror = function () { reject(new Error("браузер не смог проиграть звук")); };
+          var p = a.play();
+          if (p && p.catch) p.catch(function () { reject(new Error("браузер запретил звук — нажмите «Проверить звук»")); });
+        });
+      })
+      .then(function () { TTS.playing = false; ttsPump(); })
+      .catch(function (e) {
+        TTS.playing = false;
+        ttsStatus("err", "Озвучка не сработала: " + (e && e.message ? e.message : e));
+        ttsPump();
+      });
+  }
+  function optionNames() {
+    // названия вариантов без номеров: номера вслух не читаем
+    var nm = names(), out = [];
+    for (var i = 0; i < 3; i++) {
+      var t = (nm[i] || "").trim();
+      if (t) out.push(t);
+    }
+    return out;
+  }
+  function ttsStartText() {
+    var opts = optionNames();
+    var s = "Начинается голосование.";
+    if (opts.length) s += " Варианты: " + opts.join(", ") + ".";
+    return s + " Голосуйте в чате.";
+  }
+  function ttsFinalText() {
+    var nm = names(), c = counts(), sum = c[0] + c[1] + c[2];
+    if (!sum) return "Голосование окончено. Никто не проголосовал.";
+    var max = Math.max.apply(null, c), leaders = [];
+    for (var j = 0; j < 3; j++) if (c[j] === max) leaders.push(j);
+    var words = leaders.map(function (k) { return (nm[k] || "").trim(); }).filter(Boolean);
+    if (leaders.length === 1) {
+      return "Голосование окончено. Победил вариант" + (words[0] ? " " + words[0] : "") +
+        ". Всего голосов: " + sum + ".";
+    }
+    var list = words.length === 2 ? words[0] + " и " + words[1]
+      : words.length === 3 ? words[0] + ", " + words[1] + " и " + words[2] : "";
+    return "Голосование окончено. Ничья" + (list ? ": " + list : "") + ". Всего голосов: " + sum + ".";
+  }
+  function ttsSummary() {
+    var txt;
+    if (!$("ttsOn").checked) txt = "выключена";
+    else if (!TTS.ok) txt = "TTS-сервер не отвечает";
+    else if (TTS.engine === "ready") {
+      var sel = $("ttsVoice").selectedOptions && $("ttsVoice").selectedOptions[0];
+      txt = "готово" + (sel ? " · " + sel.textContent : "");
+    } else if (TTS.engine === "loading") txt = "модель загружается…";
+    else txt = "ошибка модели";
+    var mini = $("ttsMiniState");
+    if (mini) mini.textContent = txt;
+    var pt = $("pillTts");
+    if (pt) {
+      pt.textContent = "Опрос: " + txt;
+      pt.className = "pill " + (TTS.ok && TTS.engine === "ready" ? "good" : ($("ttsOn").checked ? "bad" : ""));
+    }
+    var pe = $("pillEngine");
+    if (pe) {
+      pe.textContent = TTS.engine === "ready" ? "Модель: " + (TTS.device || "готова")
+        : TTS.engine === "loading" ? "Модель: загружается…"
+        : TTS.engine === "error" ? "Модель: ошибка" : "Модель: ?";
+      pe.className = "pill " + ({ready: "good", loading: "warn", error: "bad"}[TTS.engine] || "");
+    }
+  }
+  function ttsInit() {
+    var c = ttsCfg();
+    $("ttsUrl").value = location.protocol === "file:" ? (c.url || "http://127.0.0.1:8765") : location.origin;
+    $("ttsVol").value = (c.vol === undefined || c.vol === null || c.vol === "") ? 90 : c.vol;
+    $("ttsOn").checked = !!c.on;
+    $("ttsStart").checked = c.start === undefined ? true : !!c.start;
+    $("ttsVote").checked = !!c.vote;
+    $("ttsCount").checked = !!c.count;
+    $("ttsFinal").checked = c.final === undefined ? true : !!c.final;
+    ["ttsUrl", "ttsVol", "ttsOn", "ttsStart", "ttsVote", "ttsCount", "ttsFinal", "ttsVoice"].forEach(function (id) {
+      var el = $(id);
+      el.addEventListener("input", function () {
+        ttsSave();
+        if (id === "ttsUrl") { TTS.fallback = false; ttsRefresh(); }
+      });
+      el.addEventListener("change", function () {
+        ttsSave();
+        if (id === "ttsUrl" || id === "ttsVoice" || id === "ttsOn") ttsRefresh();
+      });
+    });
+    $("ttsTest").addEventListener("click", function () {
+      ttsRefresh().then(function () { ttsSay("Проверка звука. Озвучка голосования готова.", true, true); });
+    });
+    $("ttsGo").addEventListener("click", function () { goTab("voice"); });
+    // браузер не даёт играть звук до первого действия пользователя - "разблокируем" заранее
+    document.addEventListener("click", function () {
+      var a = new Audio("data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA=");
+      a.volume = 0.01;
+      a.play().catch(function () {});
+    }, { once: true });
+    ttsRefresh();
+    ttsSummary();
+    setInterval(ttsRefresh, 7000);
+  }
+
+  // ---------- Twitch chat (anonymous, read-only) ----------
+  function parseTags(raw) {
+    var t = {};
+    if (!raw) return t;
+    raw.split(";").forEach(function (p) {
+      var i = p.indexOf("=");
+      if (i > 0) t[p.slice(0, i)] = p.slice(i + 1);
+    });
+    return t;
+  }
+  function handleLine(line) {
+    if (!line) return;
+    if (line.indexOf("PING") === 0) { try { ws.send("PONG :tmi.twitch.tv"); } catch (e) {} return; }
+    var mj = line.match(/^:([^!\s]+)![^ ]+ (JOIN|PART) #\S+/);
+    if (mj) { if (!helixOn) radarEvent(mj[2] === 'JOIN' ? 'join' : 'part', mj[1]); return; }
+    var mn = line.match(/^:tmi\.twitch\.tv 353 \S+ [=*@] #\S+ :(.*)$/);
+    if (mn) { mn[1].trim().split(' ').forEach(function (n) { if (n && !helixOn) radarEvent('names', n); }); return; }
+    if (/ (001|376|366) /.test(line)) { setStatus("ok", "Подключено к #" + channel); return; }
+    if (line.indexOf("RECONNECT") !== -1 && line.indexOf("PRIVMSG") === -1) { try { ws.close(); } catch (e) {} return; }
+    var m = line.match(/^(?:@(\S+) )?:([^!]+)![^ ]+ PRIVMSG #\S+ :(.*)$/);
+    if (!m) return;
+    var tags = parseTags(m[1]);
+    var nick = tags["display-name"] || m[2];
+    var id = tags["user-id"] || m[2];
+    radarEvent('msg', m[2], nick, { text: m[3].trim(), tags: tags });
+    registerVote(id, nick, m[3].trim(), m[2]);
+  }
+  function connect() {
+    var ch = $("channel").value.trim().toLowerCase().replace(/^https?:\/\/(www\.)?twitch\.tv\//, "").replace(/^#/, "").split(/[/?]/)[0];
+    if (!/^[a-z0-9_]{3,25}$/.test(ch)) {
+      setStatus("err", "Введите имя канала: латиница, цифры и _");
+      return;
+    }
+    channel = ch;
+    $("channel").value = ch;
+    radarReset();
+    hx.first = true;
+    $("lkLink").href = "https://lurkology.com/logs?c=" + encodeURIComponent(ch);
+    setTimeout(hxPoll, 800);
+    save();
+    wantConnected = true;
+    open();
+  }
+  function open() {
+    clearTimeout(reconnectTimer);
+    if (ws) { try { ws.onclose = null; ws.close(); } catch (e) {} }
+    setStatus("wait", "Подключаюсь к #" + channel + "…");
+    try {
+      ws = new WebSocket("wss://irc-ws.chat.twitch.tv:443");
+    } catch (e) {
+      setStatus("err", "Не удалось открыть соединение");
+      return;
+    }
+    ws.onopen = function () {
+      lastErr = "";
+      ws.send("CAP REQ :twitch.tv/membership twitch.tv/tags");
+      ws.send("PASS SCHMOOPIIE");
+      ws.send("NICK justinfan" + (10000 + Math.floor(Math.random() * 89999)));
+      ws.send("JOIN #" + channel);
+    };
+    ws.onmessage = function (ev) {
+      String(ev.data).split("\r\n").forEach(handleLine);
+    };
+    ws.onclose = function () {
+      if (!wantConnected) { setStatus("", "Не подключено"); return; }
+      if (lastErr) setStatus("err", lastErr); else setStatus("wait", "Соединение потеряно, переподключаюсь…");
+      reconnectTimer = setTimeout(open, 2500);
+    };
+    ws.onerror = function () {
+      lastErr = location.protocol === "file:"
+        ? "Не удалось подключиться к Twitch. Проверьте интернет, VPN и блокировщики рекламы"
+        : "Подключение заблокировано: страница открыта не как локальный файл. Скачайте twitch-poll.html и откройте его с компьютера";
+      setStatus("err", lastErr);
+    };
+  }
+  $("connectBtn").addEventListener("click", connect);
+  $("channel").addEventListener("keydown", function (e) { if (e.key === "Enter") connect(); });
+
+  // ---------- voting ----------
+  var bans = {};
+  try { bans = JSON.parse(localStorage.getItem("twitchPollBans") || "{}") || {}; } catch (e) {}
+  function saveBans() {
+    try { localStorage.setItem("twitchPollBans", JSON.stringify(bans)); } catch (e) {}
+    renderBans();
+  }
+  function removeVote(id) { poll.votes.delete(id); poll.nicks.delete(id); render(); }
+  function banVoter(id) {
+    var lg = (poll.logins || {})[id] || String(poll.nicks.get(id) || id).toLowerCase();
+    bans[lg] = poll.nicks.get(id) || lg;
+    Object.keys(poll.logins || {}).forEach(function (k) { if (poll.logins[k] === lg) removeVote(k); });
+    removeVote(id);
+    saveBans();
+  }
+  function renderBans() {
+    var box = $("banList"), ks = Object.keys(bans);
+    $("banCount").textContent = ks.length;
+    box.textContent = "";
+    ks.forEach(function (k) {
+      var r = document.createElement("div"); r.className = "banrow";
+      var n = document.createElement("span"); n.textContent = bans[k];
+      var b = document.createElement("button"); b.className = "ghost"; b.textContent = "Разбанить";
+      b.addEventListener("click", function () { delete bans[k]; saveBans(); });
+      r.appendChild(n); r.appendChild(b); box.appendChild(r);
+    });
+  }
+  renderBans();
+  function registerVote(id, nick, text, login) {
+    if (poll.state !== "running") return;
+    if (!/^[1-3]$/.test(text)) return;
+    if (bans[(login || nick).toLowerCase()]) return;
+    var v = parseInt(text, 10);
+    if (poll.votes.has(id) && !$("allowChange").checked) return;
+    if (poll.votes.get(id) === v) return;
+    poll.votes.set(id, v);
+    poll.nicks.set(id, nick);
+    poll.logins = poll.logins || {};
+    poll.logins[id] = (login || nick).toLowerCase();
+    if (login) radarVote(login);
+    poll.recent.unshift(nick + " → " + v);
+    poll.recent = poll.recent.slice(0, 5);
+    render();
+    if ($("ttsVote").checked) {
+      var onm = (names()[v - 1] || "").trim();
+      ttsSay(onm ? "Голос за " + onm + "." : "Принят голос.");
+    }
+  }
+
+  function startPoll() {
+    var total = (parseInt($("min").value, 10) || 0) * 60 + (parseInt($("sec").value, 10) || 0);
+    if (total <= 0) {
+      $("headline").textContent = "Укажите время голосования больше нуля.";
+      return;
+    }
+    poll = { state: "running", endsAt: Date.now() + total * 1000, duration: total, votes: new Map(), nicks: new Map(), recent: [] };
+    countdownSaid = false;
+    save();
+    render();
+    if ($("ttsStart").checked) ttsSay(ttsStartText(), true);
+  }
+  function finishPoll() {
+    poll.state = "done";
+    render();
+    countdownSaid = false;
+    if ($("ttsFinal").checked) ttsSay(ttsFinalText(), true);
+  }
+  $("startBtn").addEventListener("click", function () {
+    if (poll.state === "running") finishPoll(); else startPoll();
+  });
+
+  document.querySelectorAll(".chip").forEach(function (b) {
+    b.addEventListener("click", function () {
+      var t = parseInt(b.getAttribute("data-t"), 10);
+      $("min").value = Math.floor(t / 60);
+      $("sec").value = t % 60;
+      save();
+    });
+  });
+  document.querySelectorAll("[data-fake]").forEach(function (b) {
+    b.addEventListener("click", function () {
+      fakeCounter++;
+      registerVote("test-" + fakeCounter, "тест" + fakeCounter, b.getAttribute("data-fake"));
+    });
+  });
+  $("compactBtn").addEventListener("click", function () {
+    document.body.classList.add("compact");
+    $("tools").style.display = "none";
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && document.body.classList.contains("compact")) {
+      document.body.classList.remove("compact");
+      $("tools").style.display = "";
+    }
+  });
+
+  // ---------- radar ----------
+  var TAU = Math.PI * 2;
+  var BOTS = ['nightbot', 'streamelements', 'streamlabs', 'moobot', 'fossabot', 'wizebot', 'soundalerts', 'commanderroot', 'anotherttvviewer', 'streamlootsbot', 'pretzelrocks', 'drapsnatt'];
+  var rv = new Map();
+  var hist = {}, histChannel = '';
+  var rLog = { joins: [], parts: [] };
+  var rStats = { joined: 0, left: 0 };
+  var cssv = getComputedStyle(document.documentElement);
+  var COL = {
+    teal: cssv.getPropertyValue('--c2').trim() || '#4fd1c1',
+    amber: cssv.getPropertyValue('--c1').trim() || '#ffb347',
+    red: cssv.getPropertyValue('--danger').trim() || '#ff6b7a'
+  };
+  var reduceMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  var cv = $('radar'), cx = cv.getContext('2d'), W = 0, dpr = 1, hoverDots = [];
+
+  function radarReset() {
+    saveHistory();
+    histChannel = channel;
+    hist = channel ? loadHistory(channel) : {};
+    rv = new Map();
+    rLog = { joins: [], parts: [] };
+    rStats = { joined: 0, left: 0 };
+    renderRadarInfo();
+  }
+  function hash(str) {
+    var h = 2166136261;
+    for (var i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
+    return (h >>> 0) / 4294967296;
+  }
+  function isBot(login) { return $('hideBots').checked && BOTS.indexOf(login) !== -1; }
+  function pushLog(arr, v, t, ms) {
+    arr.unshift({ name: v.name, login: v.login, at: t, ms: ms });
+    if (arr.length > 50) arr.pop();
+  }
+  function radarEvent(type, name, display, extra) {
+    var login = String(name).toLowerCase();
+    if (!login || /^justinfan\d+$/.test(login)) return;
+    var now = Date.now();
+    var bot = isBot(login);
+    var v = rv.get(login);
+    if (!v) {
+      v = { login: login, name: display || name, present: false, joinedAt: 0, totalMs: 0, leftAt: 0, chatted: false, msgs: 0, angle: hash(login) * TAU };
+      rv.set(login, v);
+    }
+    if (display) v.name = display;
+    var h = histFor(login);
+    h.l = now;
+    if (type !== 'part') v.lastSeen = now;
+    if (display) h.n = display;
+    if (type === 'part') {
+      if (v.present) {
+        v.totalMs += now - v.joinedAt;
+        h.t = (h.t || 0) + (now - v.joinedAt);
+        v.present = false;
+        v.leftAt = now;
+        if (!bot) { rStats.left++; pushLog(rLog.parts, v, now, v.totalMs); }
+      }
+      return;
+    }
+    if (!v.present) {
+      v.present = true;
+      v.joinedAt = now;
+      h.v = (h.v || 0) + 1;
+      if (type !== 'names' && !bot) { rStats.joined++; pushLog(rLog.joins, v, now, 0); }
+    }
+    if (type === 'msg') { v.lastMsg = now; v.chatted = true; v.msgs++; noteMessage(h, extra || {}); }
+  }
+
+  function fmtDur(ms) {
+    var s = Math.max(0, Math.floor(ms / 1000));
+    if (s < 60) return s + ' с';
+    var m = Math.floor(s / 60);
+    if (m < 60) return m + ' мин';
+    return Math.floor(m / 60) + ' ч ' + (m % 60) + ' мин';
+  }
+  function ago(t) {
+    var d = Date.now() - t;
+    return d < 5000 ? 'только что' : fmtDur(d) + ' назад';
+  }
+
+  function sizeCanvas() {
+    var w = Math.min(560, Math.floor($('radarwrap').clientWidth));
+    if (w < 240) w = 240;
+    var d = window.devicePixelRatio || 1;
+    if (w === W && d === dpr) return;
+    W = w; dpr = d;
+    cv.style.width = W + 'px';
+    cv.style.height = W + 'px';
+    cv.width = Math.round(W * dpr);
+    cv.height = Math.round(W * dpr);
+  }
+  sizeCanvas();
+  if (window.ResizeObserver) new ResizeObserver(sizeCanvas).observe($('radarwrap'));
+  else window.addEventListener('resize', sizeCanvas);
+
+  // 1 = край радара (только пришёл), ближе к центру = дольше в чате
+  function rad(ms) {
+    var f = Math.log(1 + ms / 120000) / Math.log(121);
+    return 1 - 0.88 * Math.min(1, f);
+  }
+
+  function draw(ts) {
+    requestAnimationFrame(draw);
+    if (!W) return;
+    var c = cx, now = Date.now(), mid = W / 2, R = mid - 14;
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    c.clearRect(0, 0, W, W);
+
+    c.lineWidth = 1;
+    c.strokeStyle = 'rgba(154,161,187,0.25)';
+    c.beginPath();
+    c.moveTo(mid - R, mid); c.lineTo(mid + R, mid);
+    c.moveTo(mid, mid - R); c.lineTo(mid, mid + R);
+    c.stroke();
+    c.font = '11px Onest, system-ui, sans-serif';
+    c.textAlign = 'center';
+    c.fillStyle = 'rgba(154,161,187,0.85)';
+    [[0, ''], [5, '5 мин'], [30, '30 мин'], [60, '1 ч'], [180, '3 ч']].forEach(function (g) {
+      var rr = R * rad(g[0] * 60000);
+      c.beginPath(); c.arc(mid, mid, rr, 0, TAU); c.stroke();
+      if (g[1]) c.fillText(g[1], mid, mid - rr + 13);
+    });
+
+    var sweep = reduceMotion ? -Math.PI / 2 : ((ts || 0) / 7000 % 1) * TAU;
+    if (!reduceMotion) {
+      for (var k = 0; k < 28; k++) {
+        c.beginPath();
+        c.moveTo(mid, mid);
+        c.arc(mid, mid, R, sweep - (k + 1) * 0.04, sweep - k * 0.04);
+        c.closePath();
+        c.fillStyle = 'rgba(79,209,193,' + (0.18 * (1 - k / 28)).toFixed(3) + ')';
+        c.fill();
+      }
+      c.strokeStyle = COL.teal;
+      c.lineWidth = 1.5;
+      c.beginPath();
+      c.moveTo(mid, mid);
+      c.lineTo(mid + Math.cos(sweep) * R, mid + Math.sin(sweep) * R);
+      c.stroke();
+    }
+
+    hoverDots = [];
+    rv.forEach(function (v) {
+      if (isBot(v.login)) return;
+      var ms = v.totalMs + (v.present ? now - v.joinedAt : 0);
+      var r = R * rad(ms);
+      var x = mid + Math.cos(v.angle) * r, y = mid + Math.sin(v.angle) * r;
+      if (v.present) {
+        var diff = ((sweep - v.angle) % TAU + TAU) % TAU;
+        var glow = reduceMotion ? 0.6 : Math.max(0, 1 - diff / 3.5);
+        var color = v.chatted ? COL.amber : COL.teal;
+        c.globalAlpha = 0.45 + 0.55 * glow;
+        c.fillStyle = color;
+        c.beginPath(); c.arc(x, y, v.chatted ? 5 : 3.5, 0, TAU); c.fill();
+        var age = now - v.joinedAt;
+        if (age < 4000 && !reduceMotion) {
+          c.globalAlpha = 1 - age / 4000;
+          c.strokeStyle = color;
+          c.lineWidth = 1.5;
+          c.beginPath(); c.arc(x, y, 5 + (age / 4000) * 16, 0, TAU); c.stroke();
+        }
+        c.globalAlpha = 1;
+        hoverDots.push({ x: x, y: y, v: v, ms: ms });
+      } else {
+        var gone = now - v.leftAt;
+        if (gone < 90000) {
+          c.globalAlpha = 0.9 * (1 - gone / 90000);
+          c.strokeStyle = COL.red;
+          c.lineWidth = 1.5;
+          c.beginPath(); c.arc(x, y, 4, 0, TAU); c.stroke();
+          c.globalAlpha = 1;
+          hoverDots.push({ x: x, y: y, v: v, ms: ms });
+        }
+      }
+    });
+    c.fillStyle = COL.teal;
+    c.beginPath(); c.arc(mid, mid, 3, 0, TAU); c.fill();
+  }
+  requestAnimationFrame(draw);
+
+  cv.addEventListener('mousemove', function (e) {
+    var rect = cv.getBoundingClientRect();
+    var mx = e.clientX - rect.left, my = e.clientY - rect.top, best = null, bd = 144;
+    hoverDots.forEach(function (d) {
+      var dd = (d.x - mx) * (d.x - mx) + (d.y - my) * (d.y - my);
+      if (dd < bd) { bd = dd; best = d; }
+    });
+    var tip = $('tip');
+    if (!best) { tip.hidden = true; return; }
+    var v = best.v;
+    tip.textContent = v.name + '\n' +
+      (v.present ? 'в чате ' + fmtDur(best.ms) : 'ушёл ' + ago(v.leftAt) + ', сидел ' + fmtDur(best.ms)) + '\n' +
+      (v.msgs ? 'сообщений: ' + v.msgs : 'молчит');
+    tip.hidden = false;
+    var wr = $('radarwrap').getBoundingClientRect();
+    tip.style.left = (e.clientX - wr.left + 14) + 'px';
+    tip.style.top = (e.clientY - wr.top + 14) + 'px';
+  });
+  cv.addEventListener('mouseleave', function () { $('tip').hidden = true; });
+
+  function listFill(id, items) {
+    var el = $(id);
+    el.textContent = '';
+    if (!items.length) {
+      var e = document.createElement('li');
+      e.className = 'empty';
+      e.textContent = 'пока никого';
+      el.appendChild(e);
+      return;
+    }
+    items.slice(0, 40).forEach(function (it) {
+      var li = document.createElement('li');
+      if (it.cls) li.className = it.cls;
+      var a = document.createElement('span'); a.textContent = it.name;
+      var b = document.createElement('span'); b.textContent = it.meta;
+      li.appendChild(a); li.appendChild(b);
+      el.appendChild(li);
+    });
+  }
+  function renderRadarInfo() {
+    var now = Date.now(), here = [], chat = 0, lurk = 0;
+    rv.forEach(function (v) {
+      if (!v.present || isBot(v.login)) return;
+      here.push(v);
+      if (v.chatted) chat++; else lurk++;
+    });
+    var cells = [[here.length, 'в зале'], [lurk, 'молчат'], [chat, 'писали'], [rStats.joined, 'пришли'], [rStats.left, 'ушли']];
+    $('rstats').innerHTML = cells.map(function (c) { return '<div><b>' + c[0] + '</b><span>' + c[1] + '</span></div>'; }).join('');
+    here.sort(function (a, b) { return (b.totalMs + now - b.joinedAt) - (a.totalMs + now - a.joinedAt); });
+    listFill('lJoin', rLog.joins.filter(function (e) { return !isBot(e.login); }).map(function (e) {
+      return { name: e.name, meta: ago(e.at) };
+    }));
+    listFill('lPart', rLog.parts.filter(function (e) { return !isBot(e.login); }).map(function (e) {
+      return { name: e.name, meta: 'сидел ' + fmtDur(e.ms) + ', ' + ago(e.at) };
+    }));
+  }
+  // ---- сводка и история зрителей ----
+  function histKey(ch) { return 'twitchPollHistory:' + ch; }
+  function loadHistory(ch) {
+    try { return JSON.parse(localStorage.getItem(histKey(ch)) || '{}') || {}; } catch (e) { return {}; }
+  }
+  function saveHistory() {
+    if (!histChannel) return;
+    try {
+      var now = Date.now(), out = {};
+      Object.keys(hist).sort(function (a, b) { return (hist[b].l || 0) - (hist[a].l || 0); }).slice(0, 800).forEach(function (k) {
+        var copy = Object.assign({}, hist[k]), v = rv.get(k);
+        if (v && v.present) copy.t = (hist[k].t || 0) + (now - v.joinedAt);
+        out[k] = copy;
+      });
+      localStorage.setItem(histKey(histChannel), JSON.stringify(out));
+    } catch (e) {}
+  }
+  function histFor(login) {
+    var h = hist[login];
+    if (!h) {
+      var t = Date.now();
+      h = hist[login] = { n: login, v: 0, t: 0, m: 0, c: 0, q: 0, e: 0, k: 0, vt: 0, f: t, l: t, sub: 0, mod: 0, vip: 0, fm: 0 };
+    }
+    return h;
+  }
+  function radarVote(login) {
+    var h = histFor(String(login).toLowerCase());
+    h.vt = (h.vt || 0) + 1;
+  }
+  function noteMessage(h, x) {
+    var text = x.text || '', tags = x.tags || {}, b = tags.badges || '';
+    if (/(^|,)(subscriber|founder)[/]/.test(b) || tags.subscriber === '1') h.sub = 1;
+    if (/(^|,)moderator[/]/.test(b) || tags.mod === '1') h.mod = 1;
+    if (/(^|,)vip[/]/.test(b)) h.vip = 1;
+    if (tags['first-msg'] === '1') h.fm = 1;
+    if (/^[1-3]$/.test(text)) return;
+    h.m = (h.m || 0) + 1;
+    h.c = (h.c || 0) + text.length;
+    if (text.indexOf('?') !== -1) h.q = (h.q || 0) + 1;
+    var letters = text.replace(/[^A-Za-zА-Яа-яЁё]/g, '');
+    if (letters.length >= 5 && letters === letters.toUpperCase()) h.k = (h.k || 0) + 1;
+    if (tags.emotes) h.e = (h.e || 0) + 1;
+  }
+  function timeOf(v, now) { return v.totalMs + (v.present ? now - v.joinedAt : 0); }
+
+  // описание в трёх предложениях по истории активности
+  function describe(v, h, now) {
+    var cur = now - v.joinedAt;
+    var total = (h.t || 0) + cur;
+    var visits = h.v || 1, m = h.m || 0, votes = h.vt || 0;
+    var s1, s2, s3;
+    if (visits <= 1) {
+      s1 = 'Это первый визит на радаре, в чате уже ' + fmtDur(cur) + '.';
+    } else {
+      s1 = 'Заходит не впервые: визитов ' + visits + ', всего в чате ' + fmtDur(total) + ', первый визит на радаре — ' +
+        new Date(h.f || now).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' }) + '.';
+    }
+    var rateNum = total >= 180000 ? m / (total / 3600000) : 0;
+    if (m) {
+      var styles = [];
+      var avg = (h.c || 0) / m;
+      styles.push(avg < 12 ? 'пишет коротко' : avg > 60 ? 'пишет развёрнуто' : 'пишет сообщениями средней длины');
+      if ((h.q || 0) / m >= 0.3) styles.push('часто задаёт вопросы');
+      if ((h.k || 0) / m >= 0.3) styles.push('любит капс');
+      if ((h.e || 0) / m >= 0.4) styles.push('охотно использует смайлы');
+      s2 = 'Сообщений в чате: ' + m + (rateNum ? ', примерно ' + Math.max(1, Math.round(rateNum)) + ' в час' : '') + '; ' + styles.join(', ') + '.';
+    } else {
+      s2 = votes ? 'Обычных сообщений нет: участвует в чате только голосами.' : 'Пока молчит: сообщений в чате нет' + (cur >= 300000 ? ', но остаётся и наблюдает.' : '.');
+    }
+    var roles = [];
+    if (h.mod) roles.push('модератор');
+    if (h.vip) roles.push('VIP');
+    if (h.sub) roles.push('подписчик');
+    var type = (m >= 20 || rateNum >= 30) ? 'активный собеседник'
+      : (visits >= 3 || total >= 7200000) ? 'постоянный зритель'
+      : !m ? 'тихий наблюдатель'
+      : visits <= 1 ? 'новый участник чата'
+      : 'обычный зритель';
+    s3 = 'Итог: ' + type + (roles.length ? ', ' + roles.join(', ') : '') + (votes ? '; голосов в опросах: ' + votes : '') + '.';
+    return s1 + ' ' + s2 + ' ' + s3;
+  }
+
+  var vCards = new Map(), vOrder = '';
+  function renderViewers() {
+    var now = Date.now(), here = [], chat = 0, lurk = 0, regular = 0, fresh = 0, subs = 0, mods = 0, top = null, topM = 0;
+    rv.forEach(function (v) {
+      if (!v.present || isBot(v.login)) return;
+      here.push(v);
+      var h = histFor(v.login);
+      if (v.chatted) chat++; else lurk++;
+      if ((h.v || 1) >= 3) regular++;
+      if ((h.v || 1) <= 1) fresh++;
+      if (h.sub) subs++;
+      if (h.mod) mods++;
+      if ((h.m || 0) > topM) { topM = h.m; top = v; }
+    });
+    here.sort(function (a, b) { return timeOf(b, now) - timeOf(a, now); });
+
+    var sum;
+    if (!here.length) {
+      sum = 'Пока никого нет. Подключитесь к чату, и здесь появится сводка по зрителям.';
+    } else {
+      sum = 'В зале ' + here.length + ': писали ' + chat + ', молчат ' + lurk + '. Постоянных (3 визита и больше): ' + regular + ', новых: ' + fresh + '.';
+      sum += ' Дольше всех в чате: ' + here[0].name + ' (' + fmtDur(timeOf(here[0], now)) + ').';
+      if (top) sum += ' Больше всех сообщений: ' + top.name + ' (' + topM + ').';
+      if (subs || mods) sum += ' Подписчиков: ' + subs + ', модераторов: ' + mods + '.';
+    }
+    $('vSum').textContent = sum;
+    $('vCount').textContent = here.length ? here.length + ' в чате' : '';
+
+    var list = here.slice(0, 60), seen = {}, host = $('vList');
+    list.forEach(function (v) {
+      seen[v.login] = true;
+      var h = histFor(v.login), c = vCards.get(v.login);
+      if (!c) {
+        var el = document.createElement('details');
+        el.className = 'vcard';
+        if (vCards.size < 5) el.open = true;
+        el.innerHTML = '<summary><span class="vname"></span><span class="vmeta"></span></summary><div class="vchips"></div><p class="vdesc"></p>';
+        c = { el: el, name: el.querySelector('.vname'), meta: el.querySelector('.vmeta'), chips: el.querySelector('.vchips'), desc: el.querySelector('.vdesc'), chipsKey: '' };
+        vCards.set(v.login, c);
+      }
+      c.name.textContent = v.name;
+      c.meta.textContent = fmtDur(timeOf(v, now)) + ' · ' + (h.m || 0) + ' сообщ.';
+      var ch = [];
+      if (h.mod) ch.push('модератор');
+      if (h.vip) ch.push('VIP');
+      if (h.sub) ch.push('подписчик');
+      if ((h.v || 1) <= 1) ch.push('новичок');
+      var key = ch.join('|');
+      if (key !== c.chipsKey) {
+        c.chipsKey = key;
+        c.chips.textContent = '';
+        ch.forEach(function (t) { var s = document.createElement('span'); s.textContent = t; c.chips.appendChild(s); });
+      }
+      var d = describe(v, h, now);
+      if (c.desc.textContent !== d) c.desc.textContent = d;
+    });
+    vCards.forEach(function (c, login) {
+      if (!seen[login]) { c.el.remove(); vCards.delete(login); }
+    });
+    var order = list.map(function (v) { return v.login; }).join(',');
+    if (order !== vOrder) {
+      vOrder = order;
+      list.forEach(function (v) { host.appendChild(vCards.get(v.login).el); });
+    }
+  }
+  // ---- точный список через Twitch Helix (нужен токен) ----
+  var helixOn = false, hx = { bid: '', mid: '', ch: '', busy: false, first: true };
+  function setHx(kind, text) {
+    var el = $('hxStatus');
+    el.className = 'status ' + kind;
+    el.querySelector('span').textContent = text;
+    document.body.classList.toggle('hx', helixOn);
+    if (kind === 'err') $('hxMsg').textContent = text;
+    $('rmode').textContent = helixOn ? 'точный список Twitch' : 'по активности в чате (приблизительно)';
+  }
+  function hxFetch(path) {
+    var tok = $('tok').value.trim().replace(/^oauth:/i, '');
+    return fetch('https://api.twitch.tv/helix/' + path, { headers: { 'Authorization': 'Bearer ' + tok, 'Client-Id': $('cid').value.trim() } })
+      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); });
+  }
+  function hxSync(list) {
+    var now = Date.now(), set = {};
+    list.forEach(function (u) {
+      set[u.user_login] = 1;
+      var v = rv.get(u.user_login);
+      if (!v || !v.present) radarEvent(hx.first ? 'names' : 'join', u.user_login, u.user_name);
+      else v.lastSeen = now;
+    });
+    rv.forEach(function (v) {
+      if (v.present && !set[v.login] && now - (v.lastMsg || 0) > 60000) radarEvent('part', v.login);
+    });
+    hx.first = false;
+  }
+  function hxPoll() {
+    if (hx.busy || !channel || !$('tok').value.trim() || !$('cid').value.trim()) return;
+    hx.busy = true;
+    var ids = (hx.bid && hx.mid && hx.ch === channel) ? Promise.resolve() :
+      Promise.all([hxFetch('users?login=' + channel), hxFetch('users')]).then(function (r) {
+        if (!r[0].data.length) throw new Error('канал не найден');
+        hx.bid = r[0].data[0].id; hx.mid = r[1].data[0].id; hx.ch = channel; hx.first = true;
+      });
+    ids.then(function () {
+      var all = [];
+      function page(cur) {
+        return hxFetch('chat/chatters?broadcaster_id=' + hx.bid + '&moderator_id=' + hx.mid + '&first=1000' + (cur ? '&after=' + cur : '')).then(function (r) {
+          all = all.concat(r.data);
+          return (r.pagination && r.pagination.cursor && all.length < 5000) ? page(r.pagination.cursor) : all;
+        });
+      }
+      return page('');
+    }).then(function (list) {
+      helixOn = true;
+      hxSync(list);
+      setHx('ok', 'Подключено: в чате ' + list.length);
+    }).catch(function (e) {
+      helixOn = false;
+      var m = String((e && e.message) || e);
+      setHx('err', m === '401' ? 'Токен не подходит или устарел' : m === '403' ? 'Нужен токен владельца или модератора со scope moderator:read:chatters' : m === 'Failed to fetch' ? 'Браузер не смог связаться с Twitch: проверьте интернет, VPN и блокировщик рекламы' : 'Ошибка: ' + m);
+    }).then(function () { hx.busy = false; });
+  }
+  // без токена: кто молчит 10 минут, тот считается ушедшим
+  function idleSweep() {
+    var now = Date.now();
+    rv.forEach(function (v) {
+      if (v.present && now - (v.lastSeen || v.joinedAt) > 600000) radarEvent('part', v.login);
+    });
+  }
+  $('hideBots').addEventListener('change', function () { renderRadarInfo(); renderViewers(); });
+  setInterval(function () { if (!helixOn) idleSweep(); renderRadarInfo(); renderViewers(); }, 1000);
+  setInterval(hxPoll, 15000);
+  function goTab(name) {
+    var btn = document.querySelector('.tab[data-tab="' + name + '"]');
+    if (btn) btn.click();
+  }
+  document.querySelectorAll('.tab').forEach(function (b) {
+    b.addEventListener('click', function () {
+      document.body.classList.remove('compact');
+      document.body.classList.remove('tab-poll', 'tab-chat', 'tab-voice');
+      document.body.classList.add('tab-' + b.getAttribute('data-tab'));
+      $('tools').style.display = '';
+      document.querySelectorAll('.tab').forEach(function (x) { x.classList.toggle('on', x === b); });
+      sizeCanvas();
+      ttsRefresh();
+    });
+  });
+  setInterval(saveHistory, 15000);
+  window.addEventListener('pagehide', saveHistory);
+  window.addEventListener('beforeunload', saveHistory);
+  ['cid', 'tok'].forEach(function (id) {
+    $(id).addEventListener('change', function () { hx.bid = ''; setTimeout(hxPoll, 200); });
+  });
+  renderViewers();
+  renderRadarInfo();
+  ttsInit();
+
+  // ---------- render ----------
+  function buildBars() {
+    var host = $("bars");
+    host.innerHTML = "";
+    for (var i = 1; i <= 3; i++) {
+      var d = document.createElement("div");
+      d.className = "bar";
+      d.innerHTML =
+        '<div class="num">' + i + '</div>' +
+        '<div><div class="top"><span class="name"></span><span class="val"></span></div>' +
+        '<div class="track"><div class="fill"></div></div><div class="voters"></div></div>';
+      host.appendChild(d);
+    }
+  }
+  buildBars();
+
+  function render() {
+    var nm = names(), c = counts();
+    var sum = c[0] + c[1] + c[2];
+    var lists = [[], [], []];
+    poll.votes.forEach(function (v, id) { lists[v - 1].push({ id: id, n: poll.nicks.get(id) || id }); });
+    var max = Math.max.apply(null, c);
+    var bars = $("bars").children;
+    var done = poll.state === "done";
+
+    for (var i = 0; i < 3; i++) {
+      var b = bars[i];
+      var pct = sum ? Math.round(c[i] / sum * 100) : 0;
+      b.querySelector(".name").textContent = nm[i];
+      b.querySelector(".val").textContent = c[i] + " · " + pct + "%";
+      b.querySelector(".fill").style.width = (sum ? (c[i] / sum * 100) : 0) + "%";
+      var vEl = b.querySelector(".voters");
+      var L = lists[i], LIMIT = 40;
+      vEl.textContent = "";
+      L.slice(0, LIMIT).forEach(function (it) {
+        var s = document.createElement("span");
+        s.appendChild(document.createTextNode(it.n));
+        var x = document.createElement("button");
+        x.textContent = "×"; x.title = "Убрать голос";
+        x.addEventListener("click", function () { removeVote(it.id); });
+        var bn = document.createElement("button");
+        bn.textContent = "бан"; bn.title = "Убрать голос и запретить голосовать";
+        bn.addEventListener("click", function () { banVoter(it.id); });
+        s.appendChild(x); s.appendChild(bn);
+        vEl.appendChild(s);
+      });
+      if (L.length > LIMIT) {
+        var more = document.createElement("em");
+        more.textContent = "и ещё " + (L.length - LIMIT);
+        vEl.appendChild(more);
+      }
+      b.classList.toggle("win", done && sum > 0 && c[i] === max && c.filter(function (x) { return x === max; }).length === 1);
+      b.classList.toggle("dim", done && sum > 0 && c[i] !== max);
+    }
+
+    var btn = $("startBtn");
+    var head = $("headline");
+    if (poll.state === "running") {
+      btn.textContent = "Закончить досрочно";
+      btn.classList.add("stop");
+      head.innerHTML = "Голосование идёт. Проголосовало <b>" + sum + "</b> " + plural(sum, "зритель", "зрителя", "зрителей") + ".";
+    } else if (done) {
+      btn.textContent = "Начать новое голосование";
+      btn.classList.remove("stop");
+      if (!sum) {
+        head.textContent = "Голосование закончено. Никто не проголосовал.";
+      } else {
+        var leaders = [];
+        for (var j = 0; j < 3; j++) if (c[j] === max) leaders.push(j);
+        if (leaders.length === 1) {
+          head.innerHTML = "Голосование закончено. Победил вариант <b>" + (leaders[0] + 1) + "</b>: " + escapeHtml(nm[leaders[0]]) + ". Всего голосов: " + sum + ".";
+        } else {
+          var lnames = leaders.map(function (k) { return "<b>" + (k + 1) + "</b>"; });
+          var ltext = lnames.length === 2 ? lnames[0] + " и " + lnames[1]
+            : lnames.length === 3 ? lnames[0] + ", " + lnames[1] + " и " + lnames[2]
+            : lnames.join(", ");
+          head.innerHTML = "Голосование закончено. Ничья между вариантами " + ltext + ". Всего голосов: " + sum + ".";
+        }
+      }
+    } else {
+      btn.textContent = "Начать голосование";
+      btn.classList.remove("stop");
+    }
+
+    
+    tick();
+  }
+  function escapeHtml(s) {
+    return s.replace(/[&<>"']/g, function (ch) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch];
+    });
+  }
+
+  function tick() {
+    var t = $("timer");
+    if (poll.state === "running") {
+      var left = (poll.endsAt - Date.now()) / 1000;
+      if (left <= 0) { finishPoll(); return; }
+      t.textContent = fmt(left);
+      t.className = "timer" + (left <= 10 ? " low" : "");
+      if ($("ttsCount").checked && !countdownSaid && left <= 10.2 && left > 9) {
+        countdownSaid = true;
+        ttsSay("Осталось десять секунд.", true);
+      }
+    } else if (poll.state === "done") {
+      t.textContent = "время вышло";
+      t.className = "timer done";
+    } else {
+      t.textContent = "—";
+      t.className = "timer done";
+    }
+  }
+  setInterval(tick, 200);
+
+  ["o1", "o2", "o3"].forEach(function (id) { $(id).addEventListener("input", render); });
+  render();
+
+  // auto-connect if a channel was saved earlier
+  if ($("channel").value.trim()) connect();
+})();
+</script>
+</body>
+</html>

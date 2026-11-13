@@ -1,0 +1,29 @@
+{
+  "channel": "",
+  "autoconnect": true,
+  "default_voice": "",
+  "random_voice": false,
+  "volume": 0.9,
+  "speed": 1,
+  "language": "auto",
+  "max_len": 200,
+  "max_queue": 15,
+  "cooldown": 0,
+  "audience": "all",
+  "read_names": false,
+  "skip_commands": true,
+  "skip_digits": true,
+  "skip_rewards": true,
+  "ignore_users": [
+    "nightbot",
+    "streamelements",
+    "moobot",
+    "fossabot",
+    "streamlabs",
+    "wizebot"
+  ],
+  "blocked_words": [],
+  "disabled_voices": [],
+  "applio_path": "",
+  "cosyvoice_path": ""
+}

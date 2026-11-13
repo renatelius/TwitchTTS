@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Голоса — озвучка чата</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <h1>Озвучка чата</h1>
+  <nav>
+    <a href="/poll">Опрос</a>
+    <a href="/voices" class="active">Голоса</a>
+  </nav>
+  <div class="pills"><span class="pill" id="pillEngine">Модель: загрузка…</span></div>
+</header>
+
+<div class="page">
+  <section class="card">
+    <h2>Добавить голос по записям (клонирование)</h2>
+    <div class="row field">
+      <div><label>Имя голоса — так его будут вызывать в чате</label><input type="text" id="name" maxlength="40" placeholder="например: Геральт"></div>
+      <div><label>Другие имена, через запятую (необязательно)</label><input type="text" id="aliases" placeholder="geralt, ведьмак"></div>
+    </div>
+    <div class="drop" id="drop">
+      <b>Перетащите сюда файлы с голосом</b>
+      или нажмите, чтобы выбрать. Можно сразу несколько: mp3, wav, ogg, flac, m4a, mp4, mkv, webm
+    </div>
+    <input type="file" id="fileInput" multiple hidden accept="audio/*,video/*,.mp3,.wav,.ogg,.flac,.m4a,.opus,.mp4,.mkv,.webm">
+    <ul class="files" id="files"></ul>
+    <div class="row" style="margin-top:12px">
+      <button class="primary fit" id="createBtn">Создать голос</button>
+      <span class="muted" id="progress"></span>
+    </div>
+    <div class="err" id="createErr"></div>
+    <div id="result"></div>
+    <ol class="tips" style="margin-top:12px">
+      <li>Нужно 20–60 секунд речи одного персонажа. Минимум — 6–10 секунд.</li>
+      <li>Чем чище запись, тем лучше: без музыки, без других голосов и шума. Музыку программа не убирает.</li>
+      <li>Длинные паузы программа уберёт сама, короткие оставит - в них интонация. Громкость выравнивается целиком, поэтому перепады сохраняются.</li>
+      <li>Тон голоса можно подстроить под запись: кнопка «Подстроить тон» в списке голосов.</li>
+      <li>Спокойная обычная речь даёт лучший результат, чем крики и шёпот.</li>
+    </ol>
+  </section>
+
+  <section class="card">
+    <h2>Обучить свою RVC-модель из записей</h2>
+    <div class="hint">Своя модель персонажа на ваших записях: программа обучит её и добавит в список голосов.
+      Нужно 5–10 минут чистой речи одного человека. Обучение идёт на видеокарте (обычно 10–60 минут),
+      на это время лучше отключить чат. Нужен установленный Applio.</div>
+    <div class="row" style="margin-bottom:10px">
+      <span class="pill fit" id="pillRvc">RVC: не подключён</span>
+      <input type="text" id="applio" placeholder="папка Applio, например D:\Applio">
+      <button class="fit" id="applioBtn">Подключить Applio</button>
+    </div>
+    <div class="err" id="applioErr"></div>
+    <details id="rvcHelp" style="margin-bottom:12px">
+      <summary class="muted" style="cursor:pointer">Как установить Applio (нужно один раз)</summary>
+      <ol class="tips" style="margin-top:8px">
+        <li>Скачайте последнюю версию Applio со страницы релизов: github.com/IAHispano/Applio/releases</li>
+        <li>Распакуйте в отдельную папку <b>без пробелов и русских букв</b> в пути, например <code>D:\Applio</code>.</li>
+        <li>Запустите в ней <code>run-install.bat</code> (не от имени администратора) и дождитесь конца установки.</li>
+        <li>Один раз запустите <code>run-applio.bat</code>, дождитесь, пока откроется страница Applio, и закройте его — так он докачает нужные файлы.</li>
+        <li>Впишите папку выше и нажмите «Подключить Applio».</li>
+      </ol>
+    </details>
+    <div class="row field" style="margin-top:12px">
+      <div><label>Имя голоса — так его будут вызывать в чате</label><input type="text" id="tName" maxlength="40" placeholder="например: Геральт"></div>
+      <div><label>Другие имена, через запятую</label><input type="text" id="tAliases" placeholder="geralt, ведьмак"></div>
+    </div>
+    <div class="row field">
+      <div><label>Эпох обучения (больше — точнее и дольше)</label><input type="number" id="tEpochs" value="200" min="50" max="2000" step="50"></div>
+      <div style="flex:0 0 150px"><label>Размер пакета</label><input type="number" id="tBatch" value="4" min="1" max="16"></div>
+      <div><label>Базовый голос — им читается текст</label><select id="tBase"></select></div>
+    </div>
+    <div class="drop" id="tDrop" style="padding:16px 14px">
+      <b>Перетащите сюда записи голоса</b>
+      wav, mp3, flac, ogg, m4a, mp4 — чем чище запись, тем лучше результат
+    </div>
+    <input type="file" id="tFileInput" multiple hidden accept="audio/*,video/*,.wav,.mp3,.flac,.ogg,.m4a,.opus,.mp4,.mkv,.webm">
+    <ul class="files" id="tFiles"></ul>
+    <div class="row" style="margin-top:12px">
+      <button class="primary fit" id="tStart">Обучить модель</button>
+      <button class="fit" id="tCancel" disabled>Отменить</button>
+      <span class="muted" id="tProgress"></span>
+    </div>
+    <div class="bar" id="tBar"><i></i></div>
+    <div class="err" id="tErr"></div>
+    <div id="tResult"></div>
+    <details id="tLogWrap" style="margin-top:10px">
+      <summary class="muted" style="cursor:pointer">Журнал обучения</summary>
+      <pre class="logbox" id="tLog"></pre>
+    </details>
+  </section>
+
+  <section class="card">
+    <h2>CosyVoice 3 — второй движок озвучки</h2>
+    <div class="hint">CosyVoice 3 звучит именно так, как записано: переносит интонацию и тембр записи,
+      а XTTS их перерисовывает по тексту. Работает со своими голосами — каждому нужен кусок записи и точный текст этого куска.
+      Озвучка примерно втрое медленнее XTTS и требует отдельной папки с моделью (9 ГБ).</div>
+    <div class="row" style="margin-bottom:10px">
+      <span class="pill fit" id="pillCv">CosyVoice 3: не подключён</span>
+      <input type="text" id="cvPath" placeholder="папка CosyVoice 3, например C:\CosyVoice (путь без кириллицы)">
+      <button class="fit" id="cvBtn">Подключить</button>
+    </div>
+    <div class="err" id="cvErr"></div>
+    <div class="hint">После подключения у каждого своего голоса появится выбор движка: XTTS (быстро) или CosyVoice 3 (точнее по интонации).</div>
+  </section>
+
+  <section class="card">
+    <h2>Свои голоса</h2>
+    <div class="vlist" id="custom"></div>
+  </section>
+
+/div>
+
+<script>
+const $ = id => document.getElementById(id);
+const player = new Audio();
+let picked = [], voices = [], engine = {}, rvc = {}, cosyvoice = {};
+
+async function api(path, data, method) {
+  const r = await fetch(path, {method: method || (data ? 'POST' : 'GET'),
+    headers: data ? {'Content-Type': 'application/json'} : {}, body: data ? JSON.stringify(data) : undefined});
+  return r.json();
+}
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+const mb = n => (n / 1048576).toFixed(1) + ' МБ';
+
+// ---------- файлы ----------
+function renderFiles() {
+  const ul = $('files'); ul.replaceChildren();
+  picked.forEach((f, i) => {
+    const li = el('li');
+    const x = el('a', null, 'убрать'); x.href = '#';
+    x.onclick = e => { e.preventDefault(); picked.splice(i, 1); renderFiles(); };
+    const right = el('span', 'muted', mb(f.size) + ' · '); right.append(x);
+    li.append(el('span', null, f.name), right); ul.append(li);
+  });
+}
+function addFiles(list) {
+  for (const f of list) if (!picked.some(p => p.name === f.name && p.size === f.size)) picked.push(f);
+  renderFiles();
+}
+const drop = $('drop');
+drop.onclick = () => $('fileInput').click();
+$('fileInput').onchange = e => { addFiles(e.target.files); e.target.value = ''; };
+['dragenter', 'dragover'].forEach(n => drop.addEventListener(n, e => { e.preventDefault(); drop.classList.add('over'); }));
+['dragleave', 'drop'].forEach(n => drop.addEventListener(n, e => { e.preventDefault(); drop.classList.remove('over'); }));
+drop.addEventListener('drop', e => addFiles(e.dataTransfer.files));
+window.addEventListener('dragover', e => e.preventDefault());
+window.addEventListener('drop', e => e.preventDefault());
+
+// ---------- создание ----------
+$('createBtn').onclick = async () => {
+  $('createErr').textContent = ''; $('result').replaceChildren();
+  if (!$('name').value.trim()) { $('createErr').textContent = 'Введите имя голоса.'; return; }
+  if (!picked.length) { $('createErr').textContent = 'Добавьте хотя бы один файл.'; return; }
+  const fd = new FormData();
+  fd.append('name', $('name').value); fd.append('aliases', $('aliases').value);
+  picked.forEach(f => fd.append('files', f, f.name));
+  $('createBtn').disabled = true; $('progress').textContent = 'Обрабатываю файлы и снимаю слепок голоса… обычно 5–30 секунд';
+  try {
+    const r = await (await fetch('/api/voices', {method: 'POST', body: fd})).json();
+    if (!r.ok) { $('createErr').textContent = r.error; return; }
+    const box = el('div', 'okbox');
+    box.append(el('div', null, 'Голос «' + r.voice.name + '» готов: ' + r.report.seconds + ' с речи, образцов: ' + r.report.clips +
+      '. В чате: !г ' + r.voice.name.toLowerCase()));
+    if (r.report.ref_f0) box.append(el('div', 'muted', 'Тон записи-эталона: ' + Math.round(r.report.ref_f0) +
+      ' Гц. Подстройте голос под него кнопкой «Подстроить тон» в списке ниже.'));
+    r.report.warnings.forEach(w => box.append(el('div', 'warnbox', '⚠ ' + w)));
+    const b = el('button', 'small', '▶ Послушать'); b.style.marginTop = '8px';
+    b.onclick = () => preview(r.voice.id, b); box.append(b);
+    $('result').append(box);
+    picked = []; renderFiles(); $('name').value = ''; $('aliases').value = '';
+    load();
+  } catch (e) {
+    $('createErr').textContent = 'Нет связи с программой: ' + e;
+  } finally {
+    $('createBtn').disabled = false; $('progress').textContent = '';
+  }
+};
+
+// ---------- RVC ----------
+$('applioBtn').onclick = async () => {
+  $('applioErr').textContent = '';
+  const r = await api('/api/rvc/setup', {path: $('applio').value});
+  if (!r.ok) $('applioErr').textContent = r.error; else { rvc = r.rvc; render(); }
+};
+function baseOptions(sel, current) {
+  sel.replaceChildren();
+  for (const [label, kind] of [['Свои голоса', 'custom']]) {
+    const list = voices.filter(v => v.kind === kind);
+    if (!list.length) continue;
+    const g = document.createElement('optgroup'); g.label = label;
+    list.forEach(v => g.append(new Option(v.name, v.id)));
+    sel.append(g);
+  }
+  const ids = voices.filter(v => v.kind !== 'rvc').map(v => v.id);
+  const fallback = ids[0] || '';
+  sel.value = ids.includes(current) ? current : fallback;
+}
+
+// ---------- CosyVoice 3 ----------
+$('cvBtn').onclick = async () => {
+  $('cvErr').textContent = '';
+  $('cvBtn').disabled = true;
+  const old = $('cvBtn').textContent; $('cvBtn').textContent = 'Запускаю…';
+  const r = await api('/api/cosyvoice/setup', {path: $('cvPath').value});
+  $('cvBtn').disabled = false; $('cvBtn').textContent = old;
+  if (!r.ok) $('cvErr').textContent = r.error; else { cosyvoice = r.cosyvoice || {}; load(); }
+};
+
+// ---------- список ----------
+async function preview(id, btn) {
+  const old = btn.textContent; btn.disabled = true; btn.textContent = '…';
+  const r = await api('/api/preview', {voice: id});
+  btn.disabled = false; btn.textContent = old;
+  if (!r.ok) { alert(r.error); return; }
+  player.src = r.url; player.play();
+}
+function voiceRow(v) {
+  const row = el('div', 'voice' + (v.enabled ? '' : ' off'));
+  const info = el('div', 'grow');
+  info.append(el('div', 'vname', v.name));
+  const meta = el('div', 'vmeta');
+  meta.append('в чате: '); meta.append(el('code', null, '!г ' + v.name.toLowerCase()));
+  if (v.aliases.length) meta.append(' · также: ' + v.aliases.join(', '));
+  if (v.seconds) meta.append(' · ' + v.seconds + ' с образцов');
+  if (v.kind === 'rvc') meta.append(' · модель RVC' + (v.has_index ? '' : ' (без .index)'));
+  info.append(meta); row.append(info);
+  if (v.kind === 'custom') {
+    const box = el('div', 'pitchbox');
+    const pitch = document.createElement('input'); pitch.type = 'number';
+    pitch.min = -24; pitch.max = 24; pitch.step = 0.5;
+    pitch.value = v.pitch || 0; pitch.style.width = '68px';
+    pitch.title = 'Сдвиг тона голоса в полутонах (вниз - ниже, вверх - выше)';
+    const save = async () => {
+      const r = await api('/api/voice/pitch', {voice: v.id, pitch: +pitch.value || 0});
+      if (!r.ok) alert(r.error); else load();
+    };
+    pitch.onchange = save;
+    box.append(el('span', 'muted', 'тон '));
+    box.append(pitch);
+    if (v.ref_f0) box.append(el('span', 'muted', ' эталон ' + Math.round(v.ref_f0) + ' Гц'));
+    const cal = el('button', 'small', 'Подстроить тон');
+    cal.title = 'Подобрать сдвиг тона, чтобы голос звучал на высоте записи-эталона';
+    cal.onclick = async () => {
+      cal.disabled = true; const old = cal.textContent; cal.textContent = 'Подбираю…';
+      const r = await api('/api/voice/calibrate', {voice: v.id});
+      cal.disabled = false; cal.textContent = old;
+      if (!r.ok) alert(r.error); else load();
+    };
+    box.append(cal);
+    row.append(box);
+    const sel = document.createElement('select');
+    sel.className = 'engsel';
+    sel.title = 'Движок озвучки этого голоса';
+    sel.append(new Option('XTTS', 'xtts'));
+    sel.append(new Option('CosyVoice 3', 'cosy'));
+    sel.value = v.engine || 'xtts';
+    sel.onchange = async () => {
+      const r = await api('/api/voice/engine', {voice: v.id, engine: sel.value});
+      if (!r.ok) { alert(r.error); load(); } else load();
+    };
+    row.append(sel);
+    if ((v.engine || 'xtts') === 'cosy') {
+      const cbox = el('div', 'cvbox');
+      cbox.append(el('span', 'muted', v.cv_ready
+        ? ('образец ' + (v.cv_seconds || 0) + ' с — текст образца:')
+        : 'Образец не подготовлен.'));
+      const ta = document.createElement('textarea');
+      ta.rows = 2;
+      ta.value = v.cv_text || '';
+      ta.placeholder = 'Что сказано в образце записи';
+      cbox.append(ta);
+      const save = el('button', 'small', 'Сохранить текст');
+      save.onclick = async () => {
+        const r = await api('/api/voice/transcript', {voice: v.id, text: ta.value});
+        if (!r.ok) alert(r.error); else load();
+      };
+      const prep = el('button', 'small', v.cv_ready ? 'Пересобрать образец' : 'Подготовить образец');
+      prep.onclick = async () => {
+        prep.disabled = true; const old = prep.textContent; prep.textContent = 'Готовлю…';
+        const r = await api('/api/voice/cosyvoice', {voice: v.id});
+        prep.disabled = false; prep.textContent = old;
+        if (!r.ok) alert(r.error); else load();
+      };
+      cbox.append(save, prep);
+      row.append(cbox);
+    }
+  }
+  if (v.kind === 'rvc') {
+    const base = document.createElement('select'); base.style.width = '170px'; base.title = 'Базовый голос';
+    baseOptions(base, v.base);
+    const pitch = document.createElement('input'); pitch.type = 'number'; pitch.min = -24; pitch.max = 24;
+    pitch.value = v.pitch; pitch.style.width = '70px'; pitch.title = 'Сдвиг тона, полутонов';
+    const save = async () => { await api('/api/rvc/update', {voice: v.id, base: base.value, pitch: +pitch.value || 0}); };
+    base.onchange = save; pitch.onchange = save;
+    row.append(base, pitch);
+  }
+  const play = el('button', 'small', '▶ Послушать'); play.onclick = () => preview(v.id, play);
+  const tog = el('button', 'small', v.enabled ? 'Выключить' : 'Включить');
+  tog.onclick = async () => { await api('/api/voices/toggle', {voice: v.id, enabled: !v.enabled}); load(); };
+  row.append(play, tog);
+  if (v.kind !== 'standard') {
+    const del = el('button', 'small danger', 'Удалить');
+    del.onclick = async () => {
+      if (!confirm('Удалить голос «' + v.name + '» насовсем?')) return;
+      const r = await api('/api/voices/' + encodeURIComponent(v.id), null, 'DELETE');
+      if (!r.ok) alert(r.error); load();
+    };
+    row.append(del);
+  }
+  return row;
+}
+function render() { renderPills(); renderLists(); }
+function renderPills() {
+  const pe = $('pillEngine');
+  pe.className = 'pill ' + ({ready: 'good', loading: 'warn', error: 'bad'}[engine.status] || '');
+  pe.textContent = engine.status === 'ready' ? engine.device : engine.status === 'loading' ? 'Модель загружается… (до пары минут)' : 'Ошибка модели: ' + engine.error;
+  const pr = $('pillRvc');
+  pr.className = 'pill fit ' + ({ready: 'good', starting: 'warn', error: 'bad'}[rvc.status] || '');
+  pr.textContent = {ready: 'RVC: готов', starting: 'RVC: запускается…', error: 'RVC: ошибка — ' + rvc.error, off: 'RVC: не подключён'}[rvc.status] || 'RVC';
+  pr.title = pr.textContent;
+  if (rvc.path && document.activeElement !== $('applio') && !$('applio').value) $('applio').value = rvc.path;
+  const pc = $('pillCv');
+  pc.className = 'pill fit ' + ({ready: 'good', starting: 'warn', error: 'bad'}[cosyvoice.status] || '');
+  pc.textContent = {ready: 'CosyVoice 3: готов', starting: 'CosyVoice 3: запускается…',
+    error: 'CosyVoice 3: ошибка — ' + cosyvoice.error, off: 'CosyVoice 3: не подключён'}[cosyvoice.status] || 'CosyVoice 3';
+  pc.title = pc.textContent;
+  if (cosyvoice.path && document.activeElement !== $('cvPath') && !$('cvPath').value) $('cvPath').value = cosyvoice.path;
+  if (!window.helpSet && rvc.status) { $('rvcHelp').open = rvc.status !== 'ready'; window.helpSet = true; }
+}
+function renderLists() {
+  baseOptions($('tBase'), $('tBase').value);
+  for (const kind of ['custom']) {
+    const box = $(kind); box.replaceChildren();
+    const list = voices.filter(v => v.kind !== 'standard');
+    list.forEach(v => box.append(voiceRow(v)));
+    if (!list.length) box.append(el('div', 'muted', 'Пока нет. Добавьте первый голос в форме выше.'));
+  }
+}
+
+// ---------- обучение RVC из записей ----------
+let tPicked = [], trainTimer = null;
+function renderTFiles() {
+  const ul = $('tFiles'); ul.replaceChildren();
+  tPicked.forEach((f, i) => {
+    const li = document.createElement('li');
+    const a = document.createElement('span'); a.textContent = f.name;
+    const x = document.createElement('span'); x.textContent = '×'; x.style.cursor = 'pointer';
+    x.onclick = e => { e.preventDefault(); tPicked.splice(i, 1); renderTFiles(); };
+    li.append(a, x); ul.append(li);
+  });
+}
+function addTFiles(list) {
+  for (const f of list) if (!tPicked.some(p => p.name === f.name && p.size === f.size)) tPicked.push(f);
+  renderTFiles();
+}
+$('tFileInput').onchange = e => { addTFiles(e.target.files); e.target.value = ''; };
+const tDrop = $('tDrop');
+['dragenter','dragover'].forEach(n => tDrop.addEventListener(n, e => { e.preventDefault(); tDrop.classList.add('over'); }));
+['dragleave','drop'].forEach(n => tDrop.addEventListener(n, e => { e.preventDefault(); tDrop.classList.remove('over'); }));
+tDrop.addEventListener('drop', e => addTFiles(e.dataTransfer.files));
+
+$('tStart').onclick = async () => {
+  $('tErr').textContent = ''; $('tResult').replaceChildren(); $('tLog').textContent = '';
+  if (!$('tName').value.trim()) { $('tErr').textContent = 'Введите имя голоса.'; return; }
+  if (!tPicked.length) { $('tErr').textContent = 'Добавьте записи голоса.'; return; }
+  const fd = new FormData();
+  fd.append('name', $('tName').value);
+  fd.append('aliases', $('tAliases').value);
+  fd.append('epochs', $('tEpochs').value);
+  fd.append('batch', $('tBatch').value);
+  fd.append('base', $('tBase').value);
+  tPicked.forEach(f => fd.append('files', f, f.name));
+  $('tStart').disabled = true;
+  $('tProgress').textContent = 'Запускаю обучение…';
+  const r = await (await fetch('/api/rvc/train', {method: 'POST', body: fd})).json();
+  if (!r.ok) { $('tErr').textContent = r.error; $('tStart').disabled = false; return; }
+  pollTrain();
+};
+$('tCancel').onclick = async () => {
+  $('tCancel').disabled = true;
+  await fetch('/api/rvc/train/cancel', {method: 'POST'});
+};
+async function pollTrain() {
+  let st = {};
+  try { st = (await (await fetch('/api/rvc/train/status')).json()).train || {}; } catch (e) { return; }
+  const busy = ['queued','preparing','preprocessing','extracting','training','indexing'].indexOf(st.state) >= 0;
+  $('tBar').style.display = st.state === 'idle' ? 'none' : '';
+  $('tBar').firstElementChild.style.width = Math.round((st.progress || 0) * 100) + '%';
+  $('tProgress').textContent = busy ? (st.detail || st.stage_text || '') : ($('tProgress').textContent || '');
+  $('tStart').disabled = busy;
+  $('tCancel').disabled = !busy;
+  if (st.log && st.log.length) $('tLog').textContent = st.log.join('\n');
+  if (st.state === 'done') {
+    $('tProgress').textContent = 'Готово';
+    const box = el('div', 'okbox');
+    box.append(el('div', null, 'Модель «' + st.voice_name + '» обучена на ' +
+      (st.dataset_seconds || 0) + ' с записей за ' + st.epochs_total + ' эпох и добавлена в список голосов.'));
+    $('tResult').replaceChildren(box);
+    tPicked = []; renderTFiles();
+    load();
+    if (trainTimer) { clearInterval(trainTimer); trainTimer = null; }
+  } else if (st.state === 'error') {
+    $('tErr').textContent = st.error || 'Ошибка обучения.';
+    if (trainTimer) { clearInterval(trainTimer); trainTimer = null; }
+  } else if (st.state === 'cancelled') {
+    $('tProgress').textContent = 'Отменено';
+    if (trainTimer) { clearInterval(trainTimer); trainTimer = null; }
+  } else if (busy && !trainTimer) {
+    trainTimer = setInterval(pollTrain, 2000);
+  }
+}
+
+async function load() {
+  const r = await api('/api/state');
+  voices = r.voices; engine = r.status.engine; rvc = r.status.rvc;
+  cosyvoice = r.status.cosyvoice || {}; render();
+}
+
+load();
+const es = new EventSource('/events');
+es.onmessage = m => { const ev = JSON.parse(m.data); if (ev.type === 'voices') load(); else if (ev.type === 'status') { engine = ev.engine; rvc = ev.rvc; cosyvoice = ev.cosyvoice || cosyvoice; renderPills(); }
+  };
+</script>
+</body>
+</html>

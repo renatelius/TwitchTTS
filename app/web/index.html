@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Озвучка чата Twitch</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div id="unlock">
+  <button class="primary" id="unlockBtn">▶ Включить звук</button>
+  <div class="muted">Браузер не даёт играть звук, пока вы не нажмёте кнопку.<br>Эту вкладку нужно держать открытой — звук идёт из неё.</div>
+</div>
+
+<header>
+  <h1>Озвучка чата</h1>
+  <nav>
+    <a href="/poll">Опрос</a>
+    <a href="/voices">Голоса</a>
+  </nav>
+  <div class="pills">
+    <span class="pill" id="pillEngine">Модель: загрузка…</span>
+    <span class="pill" id="pillTwitch">Twitch: не подключён</span>
+  </div>
+</header>
+
+<div class="layout">
+  <section class="card chat">
+    <div class="chat-head">
+      <b id="chatTitle">Чат</b>
+      <span class="muted" id="queueInfo"></span>
+    </div>
+    <div id="chat"><div class="empty" id="empty">Подключитесь к каналу справа — сообщения появятся здесь.</div></div>
+  </section>
+
+  <aside class="side">
+    <div class="card">
+      <h2>Канал</h2>
+      <div class="row">
+        <input type="text" id="channel" placeholder="имя канала или ссылка">
+        <button class="primary fit" id="connectBtn">Подключить</button>
+      </div>
+      <div class="err" id="connErr"></div>
+    </div>
+
+    <div class="card">
+      <h2>Сейчас читает</h2>
+      <div class="now" id="now"><span class="muted">тишина</span></div>
+      <div class="row">
+        <button id="pauseBtn">Пауза</button>
+        <button id="skipBtn">Пропустить</button>
+        <button id="clearBtn" class="danger">Очистить</button>
+      </div>
+      <div class="field" style="margin-top:12px">
+        <label>Громкость: <span id="volVal"></span></label>
+        <input type="range" id="volume" min="0" max="100">
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Голос по умолчанию</h2>
+      <select id="defVoice"></select>
+      <div class="hint">Зритель меняет свой голос командой <b>!г имя</b>. Список голосов и добавление новых — на вкладке «Голоса».</div>
+    </div>
+
+    <div class="card">
+      <h2>Проверка</h2>
+      <div class="row">
+        <input type="text" id="testText" value="Привет, чат! Hello everyone!">
+        <button class="fit" id="testBtn">Сказать</button>
+      </div>
+      <div class="err" id="testErr"></div>
+    </div>
+
+    <button id="settingsBtn">⚙ Настройки</button>
+    <div class="hint">Чат для OBS (прозрачный фон): добавьте «Браузер» с адресом<br><code>http://127.0.0.1:8765/overlay</code></div>
+  </aside>
+</div>
+
+<dialog id="dlg">
+  <h3>Настройки</h3>
+  <div class="row field">
+    <div><label>Язык сообщений</label>
+      <select id="s_language"><option value="auto">Русский + английский (авто)</option><option value="ru">Только русский</option><option value="en">Только английский</option></select></div>
+    <div><label>Кого озвучивать</label>
+      <select id="s_audience"><option value="all">Всех</option><option value="subs">Подписчиков, VIP и модераторов</option></select></div>
+  </div>
+  <div class="row field">
+    <div><label>Макс. длина сообщения, символов</label><input type="number" id="s_max_len" min="20" max="500"></div>
+    <div><label>Макс. сообщений в очереди</label><input type="number" id="s_max_queue" min="1" max="100"></div>
+  </div>
+  <div class="row field">
+    <div><label>Пауза между сообщениями одного зрителя, сек</label><input type="number" id="s_cooldown" min="0" max="600"></div>
+    <div><label>Скорость речи: <span id="speedVal"></span></label><input type="range" id="s_speed" min="70" max="150"></div>
+  </div>
+  <label class="check"><input type="checkbox" id="s_read_names"> Называть ник перед сообщением («ник говорит: …»)</label>
+  <label class="check"><input type="checkbox" id="s_random_voice"> Зрителям без выбранного голоса давать случайный постоянный голос</label>
+  <label class="check"><input type="checkbox" id="s_skip_commands"> Не читать команды (сообщения, начинающиеся с «!»)</label>
+  <label class="check"><input type="checkbox" id="s_skip_digits"> Не читать сообщения из одних цифр (голоса «1», «2», «3» в опросах)</label>
+  <label class="check"><input type="checkbox" id="s_skip_rewards"> Не читать сообщения наград за баллы канала</label>
+  <label class="check"><input type="checkbox" id="s_autoconnect"> Подключаться к каналу при запуске</label>
+  <div class="field"><label>Не озвучивать этих пользователей (через запятую)</label><input type="text" id="s_ignore_users"></div>
+  <div class="field"><label>Запрещённые слова — сообщение с ними не читается (через запятую)</label><input type="text" id="s_blocked_words"></div>
+  <div class="row" style="justify-content:flex-end">
+    <span></span>
+    <button class="fit" id="dlgCancel">Отмена</button>
+    <button class="fit primary" id="dlgSave">Сохранить</button>
+  </div>
+</dialog>
+
+<script>
+const $ = id => document.getElementById(id);
+// режим встраивания: страница показывается внутри вкладки «Чат» приложения
+if (/[?&]embed=1/.test(location.search)) document.body.classList.add('embed');
+const chat = $('chat');
+const player = new Audio();
+let settings = {}, st = {}, voices = [];
+
+async function api(path, data, method) {
+  const r = await fetch(path, {method: method || (data ? 'POST' : 'GET'),
+    headers: data ? {'Content-Type': 'application/json'} : {}, body: data ? JSON.stringify(data) : undefined});
+  return r.json();
+}
+
+// ---------- чат ----------
+function addMsg(ev, old) {
+  const e = $('empty'); if (e) e.remove();
+  const stick = chat.scrollHeight - chat.scrollTop - chat.clientHeight < 80;
+  const div = document.createElement('div');
+  if (ev.type === 'note') {
+    div.className = 'msg note'; div.textContent = '• ' + ev.text;
+  } else {
+    div.className = 'msg ' + (ev.tts ? (old ? '' : 'wait') : 'skip');
+    div.dataset.id = ev.id;
+    const nick = document.createElement('span');
+    nick.className = 'nick'; nick.textContent = ev.user + ':';
+    nick.style.color = ev.color || '#b9a3ff';
+    div.append(nick, document.createTextNode(ev.text));
+    const tag = document.createElement('span');
+    tag.className = 'tag'; tag.textContent = ev.tts ? (ev.voice || '') : (ev.note || '');
+    div.append(tag);
+  }
+  chat.append(div);
+  while (chat.children.length > 300) chat.firstChild.remove();
+  if (stick) chat.scrollTop = chat.scrollHeight;
+}
+function mark(id, cls) {
+  const el = chat.querySelector('[data-id="' + CSS.escape(id) + '"]');
+  if (el) { el.classList.remove('wait', 'speaking'); if (cls) el.classList.add(cls); }
+}
+
+// ---------- статус ----------
+function renderStatus() {
+  if (!st.engine) return;
+  const pe = $('pillEngine'), pt = $('pillTwitch');
+  const e = st.engine;
+  pe.className = 'pill ' + ({ready: 'good', loading: 'warn', error: 'bad'}[e.status] || '');
+  pe.textContent = e.status === 'ready' ? e.device : e.status === 'loading' ? 'Модель загружается… (до пары минут)' : 'Ошибка модели: ' + e.error;
+  pe.title = pe.textContent;
+  const t = st.twitch;
+  pt.className = 'pill ' + ({on: 'good', connecting: 'warn', error: 'bad'}[t.status] || '');
+  pt.textContent = {on: 'Twitch: ' + t.channel, connecting: 'Twitch: подключение…', error: 'Twitch: ' + t.detail, off: 'Twitch: не подключён'}[t.status];
+  $('chatTitle').textContent = t.status === 'on' ? 'Чат ' + t.channel : 'Чат';
+  $('connectBtn').textContent = t.status === 'off' ? 'Подключить' : 'Отключить';
+  $('queueInfo').textContent = st.queue ? 'в очереди: ' + st.queue : '';
+  $('pauseBtn').textContent = st.paused ? 'Продолжить' : 'Пауза';
+  const now = $('now');
+  now.replaceChildren();
+  if (st.now) {
+    const b = document.createElement('b'); b.textContent = st.now.user;
+    now.append(b, document.createTextNode(' — голос «' + st.now.voice + '»'));
+  } else {
+    const s = document.createElement('span'); s.className = 'muted';
+    s.textContent = st.paused ? 'пауза' : 'тишина'; now.append(s);
+  }
+}
+function renderSettings() {
+  $('volume').value = Math.round(settings.volume * 100);
+  $('volVal').textContent = Math.round(settings.volume * 100) + '%';
+  player.volume = settings.volume;
+  if (document.activeElement !== $('channel') && !$('channel').value) $('channel').value = settings.channel || '';
+  renderVoices();
+}
+function renderVoices() {
+  const sel = $('defVoice'); sel.replaceChildren();
+  const on = voices.filter(v => v.enabled);
+  for (const [label, kind] of [['Персонажи (RVC)', 'rvc'], ['Свои голоса', 'custom']]) {
+    const list = on.filter(v => v.kind === kind);
+    if (!list.length) continue;
+    const g = document.createElement('optgroup'); g.label = label;
+    for (const v of list) { const o = new Option(v.name, v.id); g.append(o); }
+    sel.append(g);
+  }
+  if (!on.length) sel.append(new Option(st.engine && st.engine.status === 'ready' ? 'нет голосов' : 'модель загружается…', ''));
+  if (on.some(v => v.id === settings.default_voice)) sel.value = settings.default_voice;
+}
+async function loadAll() {
+  const r = await api('/api/state');
+  st = r.status; settings = r.settings; voices = r.voices;
+  renderStatus(); renderSettings();
+}
+
+// ---------- события сервера ----------
+function connectEvents() {
+  const es = new EventSource('/events');
+  es.onmessage = m => {
+    const ev = JSON.parse(m.data);
+    if (ev.type === 'hello') {
+      chat.querySelectorAll('.msg').forEach(x => x.remove());
+      ev.history.forEach(h => addMsg(h, true));
+      st = ev.status; renderStatus();
+    } else if (ev.type === 'chat' || ev.type === 'note') addMsg(ev);
+    else if (ev.type === 'status') { st = ev; renderStatus(); }
+    else if (ev.type === 'speak') {
+      mark(ev.id, 'speaking');
+      player.src = ev.url; player.volume = settings.volume;
+      player.play().catch(() => { $('unlock').style.display = 'flex'; });
+    } else if (ev.type === 'stop') { player.pause(); }
+    else if (ev.type === 'done') mark(ev.id, '');
+    else if (ev.type === 'tts_error') { mark(ev.id, ''); addMsg({type: 'note', text: 'Ошибка озвучки: ' + ev.error}); }
+    else if (ev.type === 'settings') { settings = ev.settings; renderSettings(); }
+    else if (ev.type === 'voices') loadAll();
+  };
+}
+
+// ---------- кнопки ----------
+$('unlockBtn').onclick = () => {
+  player.src = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA=';
+  player.play().catch(() => {});
+  $('unlock').style.display = 'none';
+};
+$('connectBtn').onclick = async () => {
+  $('connErr').textContent = '';
+  if (st.twitch && st.twitch.status !== 'off') { await api('/api/disconnect', {}); return; }
+  const r = await api('/api/connect', {channel: $('channel').value});
+  if (!r.ok) $('connErr').textContent = r.error; else $('channel').value = r.channel;
+};
+$('channel').onkeydown = e => { if (e.key === 'Enter') $('connectBtn').click(); };
+$('pauseBtn').onclick = () => api('/api/control/' + (st.paused ? 'resume' : 'pause'), {});
+$('skipBtn').onclick = () => api('/api/control/skip', {});
+$('clearBtn').onclick = () => api('/api/control/clear', {});
+$('volume').oninput = e => { settings.volume = e.target.value / 100; player.volume = settings.volume; $('volVal').textContent = e.target.value + '%'; };
+$('volume').onchange = () => api('/api/settings', {volume: settings.volume});
+$('defVoice').onchange = e => api('/api/settings', {default_voice: e.target.value});
+$('testBtn').onclick = async () => {
+  $('testErr').textContent = '';
+  const r = await api('/api/say', {text: $('testText').value, voice: $('defVoice').value});
+  if (!r.ok) $('testErr').textContent = r.error;
+};
+$('testText').onkeydown = e => { if (e.key === 'Enter') $('testBtn').click(); };
+
+const numeric = ['max_len', 'max_queue', 'cooldown'], bools = ['read_names', 'random_voice', 'skip_commands', 'skip_digits', 'skip_rewards', 'autoconnect'],
+      lists = ['ignore_users', 'blocked_words'], selects = ['language', 'audience'];
+$('settingsBtn').onclick = () => {
+  numeric.concat(selects).forEach(k => $('s_' + k).value = settings[k]);
+  bools.forEach(k => $('s_' + k).checked = settings[k]);
+  lists.forEach(k => $('s_' + k).value = settings[k].join(', '));
+  $('s_speed').value = Math.round(settings.speed * 100); $('speedVal').textContent = settings.speed.toFixed(2) + '×';
+  $('dlg').showModal();
+};
+$('s_speed').oninput = e => $('speedVal').textContent = (e.target.value / 100).toFixed(2) + '×';
+$('dlgCancel').onclick = () => $('dlg').close();
+$('dlgSave').onclick = async () => {
+  const d = {speed: $('s_speed').value / 100};
+  numeric.forEach(k => d[k] = +$('s_' + k).value);
+  selects.forEach(k => d[k] = $('s_' + k).value);
+  bools.forEach(k => d[k] = $('s_' + k).checked);
+  lists.forEach(k => d[k] = $('s_' + k).value.split(',').map(x => x.trim()).filter(Boolean));
+  await api('/api/settings', d);
+  $('dlg').close();
+};
+
+loadAll().then(connectEvents);
+</script>
+</body>
+</html>

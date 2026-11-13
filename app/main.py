@@ -1,0 +1,1029 @@
+# -*- coding: utf-8 -*-
+"""Озвучка чата Twitch. Запуск: start.bat (или python app/main.py)."""
+import asyncio
+import contextlib
+import hashlib
+import inspect
+import json
+import logging
+import math
+import os
+import shutil
+import sys
+import threading
+import time
+import uuid
+import webbrowser
+from collections import deque
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+
+APP_DIR = Path(__file__).resolve().parent
+ROOT = APP_DIR.parent
+sys.path.insert(0, str(APP_DIR))
+
+import uvicorn  # noqa: E402
+from starlette.applications import Starlette  # noqa: E402
+try:
+    from starlette.middleware.cors import CORSMiddleware  # noqa: E402
+except Exception:  # очень старые версии Starlette - работаем без CORS
+    CORSMiddleware = None
+from starlette.responses import FileResponse, JSONResponse, RedirectResponse, StreamingResponse  # noqa: E402
+from starlette.routing import Mount, Route  # noqa: E402
+from starlette.staticfiles import StaticFiles  # noqa: E402
+
+from engine import MockEngine, XttsEngine  # noqa: E402
+import rvc as rvclib  # noqa: E402
+import cosyvoice as cvlib  # noqa: E402
+from textproc import clean_text, segments  # noqa: E402
+from twitch import TwitchChat, normalize_channel  # noqa: E402
+from voices import VoiceError, VoiceStore, measure_f0  # noqa: E402
+from rvc_train import RvcTrainer, TrainError  # noqa: E402
+
+HOST = os.environ.get("TTS_HOST", "127.0.0.1")
+PORT = int(os.environ.get("TTS_PORT", "8765"))
+DATA = ROOT / "data"
+CACHE = DATA / "cache"
+TMP = DATA / "tmp"
+WEB = APP_DIR / "web"
+MAX_UPLOAD = 500 * 1024 * 1024
+
+DEFAULTS = {
+    "channel": "",
+    "autoconnect": True,
+    "default_voice": "",
+    "random_voice": False,     # зрителям без выбранного голоса давать постоянный случайный
+    "volume": 0.9,
+    "speed": 1.0,
+    "language": "auto",        # auto | ru | en
+    "max_len": 200,
+    "max_queue": 15,
+    "cooldown": 0,             # секунд между сообщениями одного зрителя
+    "audience": "all",         # all | subs (подписчики, VIP, модераторы)
+    "read_names": False,
+    "skip_commands": True,
+    "skip_digits": True,       # не читать сообщения из одних цифр (голоса в опросах)
+    "skip_rewards": True,      # не читать сообщения наград за баллы канала
+    "ignore_users": ["nightbot", "streamelements", "moobot", "fossabot", "streamlabs", "wizebot"],
+    "blocked_words": [],
+    "disabled_voices": [],
+    "applio_path": "",
+    "cosyvoice_path": "",
+}
+
+for d in (DATA, CACHE, TMP):
+    d.mkdir(parents=True, exist_ok=True)
+
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    handlers=[logging.StreamHandler(), logging.FileHandler(DATA / "log.txt", encoding="utf-8")])
+log = logging.getLogger("app")
+
+
+def load_json(path, default):
+    try:
+        return json.loads(Path(path).read_text(encoding="utf-8"))
+    except Exception:
+        return default
+
+
+def save_json(path, data):
+    tmp = Path(str(path) + ".tmp")
+    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    os.replace(tmp, path)
+
+
+class App:
+    def __init__(self):
+        self.settings = dict(DEFAULTS)
+        self.settings.update({k: v for k, v in load_json(DATA / "settings.json", {}).items() if k in DEFAULTS})
+        self.user_voices = load_json(DATA / "user_voices.json", {})
+        if os.environ.get("TTS_MOCK") == "1":
+            self.engine = MockEngine()
+        else:
+            self.engine = XttsEngine(license_ok=(DATA / "license_ok.txt").exists())
+        self.voices = VoiceStore(ROOT / "voices", self.engine, lambda: self.settings["disabled_voices"])
+        self.twitch = TwitchChat(self.on_chat, self.push_status)
+        bridge = rvclib.MockBridge if os.environ.get("TTS_MOCK") == "1" else rvclib.RvcBridge
+        self.rvc = bridge(APP_DIR / "rvc_worker.py", DATA / "rvc_log.txt", self.push_status_threadsafe)
+        self.trainer = RvcTrainer(self.settings["applio_path"], DATA / "rvc_models",
+                                  DATA / "rvc_train_log.txt", self.push_status_threadsafe)
+        self.cosyvoice = cvlib.CosyVoiceBridge(APP_DIR / "cosyvoice_worker.py",
+                                               DATA / "cosyvoice_log.txt",
+                                               self.push_status_threadsafe)
+        self._train_done = False
+        self.progress = ""
+        self.executor = ThreadPoolExecutor(max_workers=1)   # модель одна, работаем по очереди
+        self.clients = set()
+        self.history = deque(maxlen=150)
+        self.pending = deque()
+        self.gen = 0
+        self.now = None
+        self.paused = False
+        self.last_spoke = {}
+        self.loop = None
+
+    # ---------- события для браузера ----------
+    def broadcast(self, event):
+        if event.get("type") in ("chat", "note"):
+            self.history.append(event)
+        for q in list(self.clients):
+            try:
+                q.put_nowait(event)
+            except asyncio.QueueFull:
+                self.clients.discard(q)
+
+    def status(self):
+        return {
+            "type": "status",
+            "engine": self.engine.info(),
+            "rvc": self.rvc.info(),
+            "cosyvoice": self.cosyvoice.info(),
+            "train": self.trainer.status(),
+            "twitch": {"status": self.twitch.status, "detail": self.twitch.detail, "channel": self.twitch.channel},
+            "queue": len(self.pending) + (1 if self.now else 0),
+            "paused": self.paused,
+            "now": self.now and {"id": self.now["id"], "user": self.now["user"], "voice": self.now["voice_name"]},
+        }
+
+    def push_status(self):
+        self.broadcast(self.status())
+        self.register_trained_voice()
+
+    def register_trained_voice(self):
+        """Когда обучение закончилось - добавляем модель в список голосов."""
+        st = self.trainer.status()
+        if st["state"] != "done" or self._train_done:
+            return
+        self._train_done = True
+        res = st.get("result") or {}
+        opts = self.trainer.opts or {}
+        try:
+            voice = self.voices.create_rvc(st.get("voice_name") or "Голос",
+                                           st.get("aliases") or [],
+                                           res.get("pth"), res.get("index"),
+                                           opts.get("base", ""), int(opts.get("pitch") or 0))
+            log.info("обученная модель добавлена как голос %s", voice["name"])
+            self.broadcast({"type": "voices"})
+        except Exception as e:
+            log.exception("не удалось добавить обученную модель")
+            self.trainer.set_error("Модель обучена, но добавить её в список не получилось: %s" % e)
+
+    def push_status_threadsafe(self):
+        if self.loop:
+            self.loop.call_soon_threadsafe(self.push_status)
+
+    def start_rvc(self):
+        """Запускает RVC, если папка Applio известна (или находится сама)."""
+        path = self.settings["applio_path"] or rvclib.find_applio(ROOT)
+        if not path:
+            return
+        try:
+            self.rvc.start(path)
+            self.trainer.applio_dir = Path(path)
+            if path != self.settings["applio_path"]:
+                self.settings["applio_path"] = path
+                self.save_settings()
+        except Exception as e:
+            log.warning("RVC не запущен: %s", e)
+            self.rvc.status, self.rvc.error, self.rvc.path = "error", str(e), path
+
+    def detect_cosyvoice(self):
+        """Ищет папку с моделью CosyVoice 3, но не запускает её.
+
+        Модель грузится лениво: пока она не нужна, видеокарта остаётся свободной.
+        """
+        path = self.settings["cosyvoice_path"] or cvlib.find_cosyvoice(ROOT)
+        if path and path != self.settings["cosyvoice_path"]:
+            self.settings["cosyvoice_path"] = path
+            self.save_settings()
+        return path
+
+    def start_cosyvoice(self):
+        """Запускает CosyVoice 3, если папка с моделью известна (или находится сама)."""
+        path = self.detect_cosyvoice()
+        if not path:
+            return
+        try:
+            self.cosyvoice.start(path)
+        except Exception as e:
+            log.warning("CosyVoice 3 не запущен: %s", e)
+            self.cosyvoice.status, self.cosyvoice.error = "error", str(e)
+
+    def ensure_cosyvoice(self):
+        """Гарантирует, что воркер CosyVoice 3 запущен."""
+        if self.cosyvoice.status in ("ready", "starting"):
+            return
+        path = self.settings["cosyvoice_path"] or cvlib.find_cosyvoice(ROOT)
+        if not path:
+            raise cvlib.CosyVoiceError("Не найдена папка CosyVoice 3. Укажите её на вкладке «Голоса».")
+        self.cosyvoice.start(path)
+
+    def save_settings(self):
+        save_json(DATA / "settings.json", self.settings)
+
+    # ---------- голоса ----------
+    def default_voice(self):
+        enabled = self.voices.enabled()
+        for v in enabled:
+            if v["id"] == self.settings["default_voice"]:
+                return v
+        return enabled[0] if enabled else None
+
+    def voice_for(self, login):
+        enabled = self.voices.enabled()
+        chosen = self.user_voices.get(login)
+        for v in enabled:
+            if v["id"] == chosen:
+                return v
+        if self.settings["random_voice"] and enabled:
+            n = int(hashlib.md5(login.encode()).hexdigest(), 16)
+            return enabled[n % len(enabled)]
+        return self.default_voice()
+
+    # ---------- чат ----------
+    def on_chat(self, m):
+        s = self.settings
+        text = m["text"].strip()
+        event = {"type": "chat", "id": m["id"] or uuid.uuid4().hex, "user": m["name"],
+                 "color": m["color"], "text": text, "tts": False, "note": ""}
+        low = text.lower()
+        first, _, rest = low.partition(" ")
+
+        if first in ("!г", "!голос", "!voice"):
+            self.broadcast(event)
+            voice = self.voices.resolve(rest)
+            if voice:
+                self.user_voices[m["login"]] = voice["id"]
+                save_json(DATA / "user_voices.json", self.user_voices)
+                self.broadcast({"type": "note", "text": "%s теперь говорит голосом «%s»" % (m["name"], voice["name"])})
+            else:
+                self.broadcast({"type": "note", "text": "%s: голос «%s» не найден" % (m["name"], rest.strip())})
+            return
+        if first in ("!скип", "!skip") and (m["is_mod"] or m["is_broadcaster"]):
+            self.broadcast(event)
+            self.skip()
+            return
+
+        note = ""
+        if m["login"] in [u.lower() for u in s["ignore_users"]]:
+            note = "бот"
+        elif text.startswith("!") and s["skip_commands"]:
+            note = "команда"
+        elif s["skip_digits"] and text.strip().isdigit():
+            # голоса в опросах: зритель пишет "1", "2" или "3" - вслух это не читаем
+            note = "цифра"
+        elif m.get("is_reward") and s["skip_rewards"]:
+            note = "награда за баллы"
+        elif s["audience"] == "subs" and not (m["is_sub"] or m["is_vip"] or m["is_mod"] or m["is_broadcaster"]):
+            note = "только для подписчиков"
+        elif any(w and w.lower() in low for w in s["blocked_words"]):
+            note = "запрещённое слово"
+        elif s["cooldown"] and time.time() - self.last_spoke.get(m["login"], 0) < s["cooldown"]:
+            note = "слишком часто"
+        if note:
+            event["note"] = note
+            self.broadcast(event)
+            return
+
+        cleaned = clean_text(text, m["emotes"], int(s["max_len"]))
+        if not cleaned:
+            event["note"] = "нечего читать"
+            self.broadcast(event)
+            return
+        if len(self.pending) >= int(s["max_queue"]):
+            event["note"] = "очередь заполнена"
+            self.broadcast(event)
+            return
+        voice = self.voice_for(m["login"])
+        if not voice:
+            event["note"] = "нет голосов"
+            self.broadcast(event)
+            return
+        self.last_spoke[m["login"]] = time.time()
+        event["tts"] = True
+        event["voice"] = voice["name"]
+        self.broadcast(event)
+        speak = ("%s говорит: %s" % (m["name"].replace("_", " "), cleaned)) if s["read_names"] else cleaned
+        self.enqueue(event["id"], m["name"], speak, voice)
+
+    def enqueue(self, msg_id, user, speak_text, voice):
+        self.pending.append({"id": msg_id, "user": user, "text": speak_text, "voice_id": voice["id"],
+                             "voice_name": voice["name"], "gen": self.gen})
+        self.wake.set()
+        self.push_status()
+
+    # ---------- очередь: синтез и проигрывание ----------
+    def _synth(self, job):
+        out = CACHE / ("%s.wav" % uuid.uuid4().hex)
+        segs = segments(job["text"], self.settings["language"])
+        latents = self.voices.latents(job["voice_id"])
+        voice = self.voices.get(job["voice_id"])
+        pitch = self.voices.effective_pitch(voice)
+        if voice and voice.get("engine") == "cosy":
+            # CosyVoice 3 в режиме in-context: образец голоса + его точный текст
+            prompt, prompt_text = self.voices.cosyvoice_prompt(voice["id"])
+            self.ensure_cosyvoice()
+            dur = self.cosyvoice.synthesize(" ".join(t for _, t in segs), prompt, prompt_text,
+                                            out, self.settings["speed"])
+        elif voice and voice["kind"] == "rvc":
+            # сначала читаем текст обычным голосом, потом RVC превращает его в голос персонажа
+            pre = CACHE / ("pre_%s.wav" % uuid.uuid4().hex)
+            try:
+                self.engine.synthesize(segs, latents, pre, self.settings["speed"], pitch)
+                model, index = self.voices.model_files(voice["id"])
+                dur = self.rvc.convert(pre, out, model, index, voice["pitch"], voice["index_rate"])
+            finally:
+                try:
+                    pre.unlink()
+                except OSError:
+                    pass
+        else:
+            dur = self.engine.synthesize(segs, latents, out, self.settings["speed"], pitch)
+        return out, dur
+
+    async def worker(self):
+        """Берёт сообщения по одному: озвучивает, отправляет в браузер, ждёт конца звучания."""
+        while True:
+            if not self.pending or self.paused or self.engine.status != "ready":
+                self.wake.clear()
+                try:
+                    await asyncio.wait_for(self.wake.wait(), timeout=1.0)
+                except asyncio.TimeoutError:
+                    pass
+                continue
+            job = self.pending.popleft()
+            self.now = job
+            self.push_status()
+            self.skip_event.clear()
+            try:
+                path, dur = await self.loop.run_in_executor(self.executor, self._synth, job)
+                if job["gen"] == self.gen and not self.skip_event.is_set():
+                    self.broadcast({"type": "speak", "id": job["id"], "url": "/audio/" + path.name,
+                                    "user": job["user"], "voice": job["voice_name"], "duration": dur})
+                    try:
+                        await asyncio.wait_for(self.skip_event.wait(), timeout=dur + 0.35)
+                        self.broadcast({"type": "stop"})
+                    except asyncio.TimeoutError:
+                        pass
+            except Exception as e:
+                log.exception("ошибка озвучки")
+                self.broadcast({"type": "tts_error", "id": job["id"], "error": str(e)})
+            self.broadcast({"type": "done", "id": job["id"]})
+            self.now = None
+            self.push_status()
+            self.cleanup_cache()
+
+    def skip(self):
+        self.skip_event.set()
+
+    def clear(self):
+        self.gen += 1
+        for job in self.pending:
+            self.broadcast({"type": "done", "id": job["id"]})
+        self.pending.clear()
+        self.skip()
+        self.push_status()
+
+    def cleanup_cache(self):
+        limit = time.time() - 300
+        for f in CACHE.glob("*.wav"):
+            try:
+                if f.stat().st_mtime < limit:
+                    f.unlink()
+            except OSError:
+                pass
+
+    async def watch_engine(self):
+        """Сообщает браузеру, когда модель загрузилась."""
+        while self.engine.status == "loading":
+            await asyncio.sleep(1)
+        self.push_status()
+        self.broadcast({"type": "voices"})
+        self.wake.set()
+
+    async def startup(self):
+        self.loop = asyncio.get_running_loop()
+        self.wake = asyncio.Event()
+        self.skip_event = asyncio.Event()
+        shutil.rmtree(TMP, ignore_errors=True)
+        TMP.mkdir(exist_ok=True)
+        threading.Thread(target=self.engine.load, daemon=True).start()
+        self.start_rvc()
+        self.detect_cosyvoice()
+        self.tasks = [asyncio.create_task(self.worker()), asyncio.create_task(self.watch_engine())]
+        if self.settings["autoconnect"] and self.settings["channel"]:
+            await self.twitch.connect(self.settings["channel"])
+
+
+app_state = App()
+
+
+# ---------- HTTP ----------
+def ok(**data):
+    return JSONResponse({"ok": True, **data})
+
+
+def fail(message, code=400):
+    return JSONResponse({"ok": False, "error": message}, status_code=code)
+
+
+async def body(request):
+    try:
+        data = await request.json()
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+async def page_index(request):
+    return FileResponse(WEB / "index.html")
+
+
+async def page_root(request):
+    """Главная страница теперь - вкладка «Опрос»."""
+    return RedirectResponse("/poll", status_code=303)
+
+
+async def page_voices(request):
+    return FileResponse(WEB / "voices.html")
+
+
+async def page_overlay(request):
+    return FileResponse(WEB / "overlay.html")
+
+
+async def page_poll(request):
+    return FileResponse(WEB / "poll.html")
+
+
+async def events(request):
+    a = app_state
+    q = asyncio.Queue(maxsize=1000)
+    a.clients.add(q)
+
+    async def stream():
+        try:
+            yield "retry: 2000\n\n"
+            hello = {"type": "hello", "history": list(a.history), "status": a.status()}
+            yield "data: %s\n\n" % json.dumps(hello, ensure_ascii=False)
+            while True:
+                try:
+                    ev = await asyncio.wait_for(q.get(), timeout=15)
+                    yield "data: %s\n\n" % json.dumps(ev, ensure_ascii=False)
+                except asyncio.TimeoutError:
+                    yield ": ping\n\n"
+        finally:
+            a.clients.discard(q)
+
+    return StreamingResponse(stream(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+async def api_state(request):
+    a = app_state
+    return ok(status=a.status(), settings=a.settings, voices=a.voices.list())
+
+
+async def api_settings(request):
+    a = app_state
+    data = await body(request)
+    for key, default in DEFAULTS.items():
+        if key not in data or key in ("channel", "disabled_voices", "applio_path", "cosyvoice_path"):
+            continue
+        val = data[key]
+        try:
+            if isinstance(default, bool):
+                val = bool(val)
+            elif isinstance(default, int):
+                val = max(0, min(int(val), 2000))
+            elif isinstance(default, float):
+                val = float(val)
+            elif isinstance(default, list):
+                val = [str(x).strip() for x in val if str(x).strip()][:200]
+            else:
+                val = str(val)
+        except (TypeError, ValueError):
+            continue
+        a.settings[key] = val
+    a.settings["speed"] = max(0.7, min(a.settings["speed"], 1.5))
+    a.settings["volume"] = max(0.0, min(a.settings["volume"], 1.0))
+    a.settings["max_len"] = max(20, min(a.settings["max_len"], 500))
+    a.settings["max_queue"] = max(1, min(a.settings["max_queue"], 100))
+    a.save_settings()
+    a.broadcast({"type": "settings", "settings": a.settings})
+    return ok(settings=a.settings)
+
+
+async def api_connect(request):
+    a = app_state
+    data = await body(request)
+    channel = normalize_channel(data.get("channel", ""))
+    if not channel:
+        return fail("Введите имя канала, например: mychannel")
+    a.settings["channel"] = channel
+    a.save_settings()
+    await a.twitch.connect(channel)
+    return ok(channel=channel)
+
+
+async def api_disconnect(request):
+    await app_state.twitch.disconnect()
+    return ok()
+
+
+async def api_control(request):
+    a = app_state
+    action = request.path_params["action"]
+    if action == "skip":
+        a.skip()
+    elif action == "clear":
+        a.clear()
+    elif action == "pause":
+        a.paused = True
+    elif action == "resume":
+        a.paused = False
+        a.wake.set()
+    else:
+        return fail("неизвестная команда", 404)
+    a.push_status()
+    return ok()
+
+
+async def api_say(request):
+    """Проверочная фраза: идёт через общую очередь, как сообщение из чата."""
+    a = app_state
+    data = await body(request)
+    text = clean_text(str(data.get("text", "")), None, int(a.settings["max_len"]))
+    if not text:
+        return fail("Введите текст")
+    voice = a.voices.get(str(data.get("voice", ""))) or a.default_voice()
+    if not voice:
+        return fail("Нет доступных голосов")
+    if a.engine.status != "ready":
+        return fail("Модель озвучки ещё не готова")
+    event = {"type": "chat", "id": uuid.uuid4().hex, "user": "Проверка", "color": "#9aa4b2",
+             "text": text, "tts": True, "note": "", "voice": voice["name"]}
+    a.broadcast(event)
+    a.enqueue(event["id"], "Проверка", text, voice)
+    return ok()
+
+
+async def api_preview(request):
+    """Прослушать голос на странице голосов (мимо очереди)."""
+    a = app_state
+    data = await body(request)
+    voice = a.voices.get(str(data.get("voice", "")))
+    text = clean_text(str(data.get("text", "")), None, 200) or "Привет, чат! Это проверка голоса."
+    if not voice:
+        return fail("Голос не найден", 404)
+    if a.engine.status != "ready":
+        return fail("Модель озвучки ещё не готова")
+    job = {"text": text, "voice_id": voice["id"]}
+    try:
+        path, _ = await a.loop.run_in_executor(a.executor, a._synth, job)
+    except Exception as e:
+        log.exception("ошибка прослушивания")
+        return fail("Ошибка озвучки: %s" % e, 500)
+    return ok(url="/audio/" + path.name)
+
+
+async def api_announce(request):
+    """Синтез одной фразы вне очереди - для внешних страниц (например, голосования)."""
+    a = app_state
+    data = await body(request)
+    text = clean_text(str(data.get("text", "")), None, int(a.settings["max_len"]))
+    if not text:
+        return fail("Пустой текст")
+    voice = a.voices.get(str(data.get("voice", ""))) or a.default_voice()
+    if not voice:
+        return fail("Нет доступных голосов")
+    if a.engine.status != "ready":
+        return fail("Модель озвучки ещё не готова", 503)
+    job = {"text": text, "voice_id": voice["id"]}
+    try:
+        path, dur = await a.loop.run_in_executor(a.executor, a._synth, job)
+    except Exception as e:
+        log.exception("ошибка озвучки")
+        return fail("Ошибка озвучки: %s" % e, 500)
+    return ok(url="/audio/" + path.name, duration=dur, voice=voice["name"])
+
+
+async def api_voices(request):
+    return ok(voices=app_state.voices.list())
+
+
+async def api_voice_create(request):
+    a = app_state
+    work = TMP / uuid.uuid4().hex
+    work.mkdir(parents=True)
+    try:
+        form = await request.form(max_files=40, max_part_size=MAX_UPLOAD)
+        name = str(form.get("name", ""))
+        aliases = [x for x in str(form.get("aliases", "")).replace(";", ",").split(",")]
+        paths, names, total = [], {}, 0
+        for n, f in enumerate(form.getlist("files")):
+            if not hasattr(f, "read"):
+                continue
+            ext = os.path.splitext(f.filename or "")[1][:8]
+            ext = "".join(c for c in ext if c.isalnum() or c == ".")
+            dst = work / ("src_%02d%s" % (n, ext))
+            with open(dst, "wb") as out:
+                while True:
+                    chunk = await f.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    total += len(chunk)
+                    if total > MAX_UPLOAD:
+                        return fail("Файлы слишком большие (больше 500 МБ).")
+                    out.write(chunk)
+            paths.append(dst)
+            names[str(dst)] = os.path.basename(f.filename or dst.name)[:80]
+        if not paths:
+            return fail("Добавьте хотя бы один файл с голосом.")
+        try:
+            a.voices.check_name(name, aliases)
+            voice, report = await a.loop.run_in_executor(a.executor, a.voices.create, name, aliases, paths, names)
+        except VoiceError as e:
+            return fail(str(e))
+        except Exception as e:
+            log.exception("ошибка создания голоса")
+            return fail("Не получилось создать голос: %s" % e, 500)
+        a.broadcast({"type": "voices"})
+        return ok(voice=voice, report=report)
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+
+
+
+async def api_voice_pitch(request):
+    """Сдвиг тона своего голоса (полутона)."""
+    a = app_state
+    data = await body(request)
+    try:
+        voice = a.voices.update_pitch(str(data.get("voice", "")), data.get("pitch", 0))
+    except VoiceError as e:
+        return fail(str(e))
+    except Exception as e:
+        log.exception("ошибка сдвига тона")
+        return fail("Не удалось изменить тон: %s" % e, 500)
+    a.broadcast({"type": "voices"})
+    return ok(voice=voice)
+
+
+async def api_voice_calibrate(request):
+    """Подстраивает тон голоса под тон записи-эталона.
+
+    XTTS переносит тембр, но не абсолютную высоту: клон почти всегда звучит
+    выше или ниже оригинала. Здесь мы синтезируем короткую пробу, измеряем её
+    основной тон и вычисляем сдвиг, который вернёт голос к высоте эталона.
+    """
+    a = app_state
+    data = await body(request)
+    voice = a.voices.get(str(data.get("voice", "")))
+    if not voice or voice["kind"] != "custom":
+        return fail("Подстройка доступна только для своих голосов.")
+    ref = float(voice.get("ref_f0") or 0)
+    if ref <= 0:
+        return fail("Нет данных эталона. Переимпортируйте голос с записями.")
+    if a.engine.status != "ready":
+        return fail("Модель озвучки ещё не готова", 503)
+    probe = "Привет, это проверка тона голоса."
+    path = CACHE / ("cal_%s.wav" % uuid.uuid4().hex)
+    try:
+        segs = segments(probe, a.settings["language"])
+        latents = a.voices.latents(voice["id"])
+        await a.loop.run_in_executor(a.executor, a.engine.synthesize, segs, latents, path,
+                                     a.settings["speed"], 0.0)
+        measured = measure_f0(path)
+    except Exception as e:
+        log.exception("ошибка подстройки тона")
+        return fail("Не удалось подобрать тон: %s" % e, 500)
+    finally:
+        try:
+            path.unlink()
+        except OSError:
+            pass
+    if measured <= 0:
+        return fail("Не удалось измерить тон пробной записи.")
+    steps = 12.0 * math.log2(ref / measured)
+    steps = max(-24.0, min(steps, 24.0))
+    try:
+        updated = a.voices.update_pitch(voice["id"], steps)
+    except VoiceError as e:
+        return fail(str(e))
+    a.broadcast({"type": "voices"})
+    return ok(voice=updated, ref_f0=round(ref, 1), measured=round(measured, 1),
+              pitch=round(steps, 1),
+              note="Тон голоса подстроен под запись образца: сдвиг %+.1f полутона."
+                   % steps)
+
+
+async def api_voice_delete(request):
+    a = app_state
+    try:
+        a.voices.delete(request.path_params["voice_id"])
+    except VoiceError as e:
+        return fail(str(e))
+    a.broadcast({"type": "voices"})
+    return ok()
+
+
+async def api_voice_toggle(request):
+    """Включить/выключить голос."""
+    a = app_state
+    data = await body(request)
+    target, enabled = str(data.get("voice", "")), bool(data.get("enabled"))
+    ids = [v["id"] for v in a.voices.list() if v["id"] == target]
+    disabled = set(a.settings["disabled_voices"])
+    for i in ids:
+        (disabled.discard if enabled else disabled.add)(i)
+    a.settings["disabled_voices"] = sorted(disabled)
+    a.save_settings()
+    a.broadcast({"type": "voices"})
+    return ok()
+
+
+async def api_cosyvoice_setup(request):
+    """Указать папку CosyVoice 3 и запустить её."""
+    a = app_state
+    data = await body(request)
+    path = str(data.get("path", "")).strip().strip('"') or cvlib.find_cosyvoice(ROOT)
+    if not path:
+        return fail("Укажите папку с CosyVoice 3 (в ней должны быть env и pretrained_models).")
+    try:
+        cvlib.check_cosyvoice(path)
+    except cvlib.CosyVoiceError as e:
+        return fail(str(e))
+    try:
+        a.cosyvoice.start(path)
+    except cvlib.CosyVoiceError as e:
+        return fail(str(e))
+    except Exception as e:
+        log.exception("ошибка запуска CosyVoice 3")
+        return fail("Не удалось запустить CosyVoice 3: %s" % e, 500)
+    a.settings["cosyvoice_path"] = a.cosyvoice.path
+    a.save_settings()
+    a.push_status()
+    return ok(cosyvoice=a.cosyvoice.info())
+
+
+async def api_voice_engine(request):
+    """Переключить движок озвучки своего голоса: XTTS или CosyVoice 3."""
+    a = app_state
+    data = await body(request)
+    try:
+        voice = a.voices.set_engine(str(data.get("voice", "")), str(data.get("engine", "xtts")))
+    except (VoiceError, ValueError, TypeError) as e:
+        return fail(str(e))
+    a.broadcast({"type": "voices"})
+    return ok(voice=voice)
+
+
+async def api_voice_cosyvoice(request):
+    """Подготовить образец CosyVoice 3 для голоса и расшифровать его."""
+    a = app_state
+    data = await body(request)
+    voice_id = str(data.get("voice", ""))
+    try:
+        path, text = a.voices.prepare_cosyvoice(voice_id)
+    except (VoiceError, OSError) as e:
+        return fail(str(e))
+    if not text:
+        try:
+            a.ensure_cosyvoice()
+            text = a.cosyvoice.transcribe(path)
+        except Exception as e:
+            log.warning("не удалось расшифровать образец: %s", e)
+            text = ""
+        if text:
+            try:
+                a.voices.set_transcript(voice_id, text)
+            except VoiceError:
+                pass
+    a.broadcast({"type": "voices"})
+    return ok(voice=a.voices.get(voice_id), transcript=text)
+
+
+async def api_voice_transcript(request):
+    """Сохранить текст образца CosyVoice 3."""
+    a = app_state
+    data = await body(request)
+    try:
+        voice = a.voices.set_transcript(str(data.get("voice", "")), data.get("text", ""))
+    except (VoiceError, ValueError, TypeError) as e:
+        return fail(str(e))
+    a.broadcast({"type": "voices"})
+    return ok(voice=voice)
+
+
+async def api_rvc_setup(request):
+    """Указать папку Applio и запустить RVC."""
+    a = app_state
+    data = await body(request)
+    path = str(data.get("path", "")).strip().strip('"') or rvclib.find_applio(ROOT)
+    if not path:
+        return fail("Укажите папку, в которую установлен Applio, например D:\\Applio")
+    try:
+        a.rvc.start(path)
+    except rvclib.RvcError as e:
+        return fail(str(e))
+    except Exception as e:
+        log.exception("ошибка запуска RVC")
+        return fail("Не удалось запустить Applio: %s" % e, 500)
+    a.settings["applio_path"] = a.rvc.path
+    a.save_settings()
+    a.push_status()
+    return ok(rvc=a.rvc.info())
+
+
+def _set_progress(text):
+    a = app_state
+    a.progress = text
+    a.loop.call_soon_threadsafe(a.broadcast, {"type": "progress", "text": text})
+
+
+async def api_rvc_train(request):
+    """Обучение RVC-модели из загруженных записей."""
+    a = app_state
+    form = await request.form(max_files=40, max_part_size=MAX_UPLOAD)
+    name = str(form.get("name", ""))
+    aliases = [x.strip() for x in str(form.get("aliases", "")).replace(";", ",").split(",") if x.strip()]
+    try:
+        epochs = max(10, min(2000, int(str(form.get("epochs", "200")) or 200)))
+        batch = max(1, min(32, int(str(form.get("batch", "4")) or 4)))
+        sample_rate = int(str(form.get("sample_rate", "40000")) or 40000)
+        pitch = int(str(form.get("pitch", "0")) or 0)
+    except ValueError:
+        return fail("Неверные параметры обучения.")
+    base = str(form.get("base", ""))
+    work = TMP / ("train_%s" % uuid.uuid4().hex)
+    work.mkdir(parents=True, exist_ok=True)
+    files, total = [], 0
+    for n, f in enumerate(form.getlist("files")):
+        if not hasattr(f, "read"):
+            continue
+        ext = os.path.splitext(f.filename or "")[1][:8]
+        ext = "".join(c for c in ext if c.isalnum() or c == ".") or ".wav"
+        dst = work / ("src_%02d%s" % (n, ext))
+        with open(dst, "wb") as out:
+            while True:
+                chunk = await f.read(1024 * 1024)
+                if not chunk:
+                    break
+                total += len(chunk)
+                if total > MAX_UPLOAD:
+                    shutil.rmtree(work, ignore_errors=True)
+                    return fail("Файлы слишком большие (больше 500 МБ).")
+                out.write(chunk)
+        files.append(dst)
+    if not files:
+        shutil.rmtree(work, ignore_errors=True)
+        return fail("Добавьте записи голоса.")
+    a.trainer.opts = {"base": base, "pitch": pitch, "epochs": epochs,
+                      "batch": batch, "sample_rate": sample_rate}
+    a._train_done = False
+    try:
+        status = a.trainer.start(name, aliases, files, a.trainer.opts)
+    except TrainError as e:
+        shutil.rmtree(work, ignore_errors=True)
+        return fail(str(e))
+    return ok(train=status)
+
+
+async def api_rvc_train_status(request):
+    """Текущее состояние обучения."""
+    return ok(train=app_state.trainer.status())
+
+
+async def api_rvc_train_cancel(request):
+    """Остановить обучение."""
+    a = app_state
+    return ok(canceled=a.trainer.cancel())
+
+
+async def api_rvc_update(request):
+    a = app_state
+    data = await body(request)
+    try:
+        voice = a.voices.update_rvc(str(data.get("voice", "")), data.get("base"), data.get("pitch"),
+                                    data.get("index_rate"))
+    except (VoiceError, ValueError, TypeError) as e:
+        return fail(str(e))
+    a.broadcast({"type": "voices"})
+    return ok(voice=voice)
+
+
+async def audio(request):
+    name = request.path_params["name"]
+    path = CACHE / name
+    if "/" in name or "\\" in name or not name.endswith(".wav") or not path.exists():
+        return fail("нет файла", 404)
+    return FileResponse(path, media_type="audio/wav", headers={"Cache-Control": "no-store"})
+
+
+async def api_debug_chat(request):
+    """Только для проверки с заглушкой: подставить сообщение, как будто оно пришло из чата."""
+    d = await body(request)
+    app_state.on_chat({"id": uuid.uuid4().hex, "login": d.get("user", "test").lower(), "name": d.get("user", "test"),
+                       "color": d.get("color", ""), "text": d.get("text", ""), "emotes": [],
+                       "is_mod": bool(d.get("mod")), "is_broadcaster": False, "is_reward": bool(d.get("reward")),
+                       "is_sub": False, "is_vip": False})
+    return ok()
+
+
+routes = [
+    Route("/", page_root),
+    Route("/chat", page_index),
+    Route("/voices", page_voices),
+    Route("/overlay", page_overlay),
+    Route("/poll", page_poll),
+    Route("/events", events),
+    Route("/api/state", api_state),
+    Route("/api/settings", api_settings, methods=["POST"]),
+    Route("/api/connect", api_connect, methods=["POST"]),
+    Route("/api/disconnect", api_disconnect, methods=["POST"]),
+    Route("/api/control/{action}", api_control, methods=["POST"]),
+    Route("/api/say", api_say, methods=["POST"]),
+    Route("/api/preview", api_preview, methods=["POST"]),
+    Route("/api/announce", api_announce, methods=["POST"]),
+    Route("/api/voices", api_voices, methods=["GET"]),
+    Route("/api/voices", api_voice_create, methods=["POST"]),
+    Route("/api/voices/toggle", api_voice_toggle, methods=["POST"]),
+    Route("/api/rvc/setup", api_rvc_setup, methods=["POST"]),
+    Route("/api/cosyvoice/setup", api_cosyvoice_setup, methods=["POST"]),
+    Route("/api/voice/engine", api_voice_engine, methods=["POST"]),
+    Route("/api/voice/cosyvoice", api_voice_cosyvoice, methods=["POST"]),
+    Route("/api/voice/transcript", api_voice_transcript, methods=["POST"]),
+    Route("/api/rvc/update", api_rvc_update, methods=["POST"]),
+    Route("/api/rvc/train", api_rvc_train, methods=["POST"]),
+    Route("/api/rvc/train/status", api_rvc_train_status, methods=["GET"]),
+    Route("/api/rvc/train/cancel", api_rvc_train_cancel, methods=["POST"]),
+    Route("/api/voices/{voice_id:path}", api_voice_delete, methods=["DELETE"]),
+    Route("/api/voice/pitch", api_voice_pitch, methods=["POST"]),
+    Route("/api/voice/calibrate", api_voice_calibrate, methods=["POST"]),
+    Route("/audio/{name}", audio),
+    *([Route("/api/debug/chat", api_debug_chat, methods=["POST"])] if os.environ.get("TTS_MOCK") == "1" else []),
+    Mount("/static", StaticFiles(directory=WEB), name="static"),
+]
+
+@contextlib.asynccontextmanager
+async def lifespan(_app):
+    await app_state.startup()
+    yield
+
+
+class PrivateNetworkMiddleware:
+    """Запасной вариант для старых Starlette: добавляет заголовок для запросов
+    с локальной страницы (file://) к 127.0.0.1 (Private Network Access)."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        headers = dict(scope.get("headers") or {})
+        if headers.get(b"access-control-request-private-network") != b"true":
+            await self.app(scope, receive, send)
+            return
+
+        async def send_wrapper(message):
+            if message["type"] == "http.response.start":
+                raw = message.setdefault("headers", [])
+                if not any(k.lower() == b"access-control-allow-private-network" for k, _ in raw):
+                    raw.append((b"access-control-allow-private-network", b"true"))
+            await send(message)
+
+        await self.app(scope, receive, send_wrapper)
+
+
+app = Starlette(routes=routes, lifespan=lifespan)
+# Страница голосования открывается как локальный файл (origin "null") и должна
+# обращаться к API - поэтому разрешаем локальные источники.
+if CORSMiddleware is not None:
+    cors_kwargs = dict(
+        allow_origins=[],
+        allow_origin_regex=r"^(null|https?://(127\.0\.0\.1|localhost)(:\d+)?)$",
+        allow_credentials=False,
+        allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+        allow_headers=["*"],
+        expose_headers=[],
+        max_age=600,
+    )
+    if "allow_private_network" in inspect.signature(CORSMiddleware.__init__).parameters:
+        cors_kwargs["allow_private_network"] = True
+    app.add_middleware(CORSMiddleware, **cors_kwargs)
+app.add_middleware(PrivateNetworkMiddleware)
+
+
+if __name__ == "__main__":
+    url = "http://%s:%d" % (HOST, PORT)
+    print("\n  Озвучка чата Twitch запущена: %s\n  Чтобы выключить, закройте это окно.\n" % url)
+    if "--no-browser" not in sys.argv:
+        threading.Timer(1.5, lambda: webbrowser.open(url)).start()
+    try:
+        uvicorn.run(app, host=HOST, port=PORT, log_level="warning", timeout_graceful_shutdown=1)
+    finally:
+        app_state.rvc.stop()

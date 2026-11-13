@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Локальное окружение и модели (тяжёлые, не хранятся в репозитории)
+env/
+models/
+cosyvoice/
+Applio/
+applio/
+release/
+
+# Данные пользователя
+data/*
+!data/settings.example.json
+voices/
+VoiceReader/
+записи/
+старые-голоса/
+*.zip
+
+# Логи и мусор
+*.log
+*.wav
+*.pth
+*.pt
+.DS_Store
+Thumbs.db
+desktop.ini
