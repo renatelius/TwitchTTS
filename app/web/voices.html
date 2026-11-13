@@ -7,9 +7,9 @@
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-<header>
-  <h1>Озвучка чата</h1>
-  <nav>
+<header class="topbar">
+  <div class="brand"><span class="logo">♪</span><span>Озвучка чата</span></div>
+  <nav class="segmented">
     <a href="/poll">Опрос</a>
     <a href="/voices" class="active">Голоса</a>
   </nav>
@@ -17,11 +17,52 @@
 </header>
 
 <div class="page">
+
   <section class="card">
-    <h2>Добавить голос по записям (клонирование)</h2>
-    <div class="row field">
-      <div><label>Имя голоса — так его будут вызывать в чате</label><input type="text" id="name" maxlength="40" placeholder="например: Геральт"></div>
-      <div><label>Другие имена, через запятую (необязательно)</label><input type="text" id="aliases" placeholder="geralt, ведьмак"></div>
+    <div class="card-head">
+      <div>
+        <h2>Движки озвучки <span class="badge accent">CosyVoice 3</span></h2>
+        <span class="sub">CosyVoice 3 переносит интонацию и тембр записи, XTTS быстрее, но перерисовывает мелодию.
+          Модель грузится лениво: пока CosyVoice не используется, видеопамять свободна.</span>
+      </div>
+    </div>
+    <div class="row wrap">
+      <span class="pill fit" id="pillCv">CosyVoice 3: не подключён</span>
+      <input type="text" id="cvPath" placeholder="папка CosyVoice 3, например C:\CosyVoice (путь без кириллицы)">
+      <button class="btn fit" id="cvBtn">Подключить</button>
+    </div>
+    <div class="err" id="cvErr"></div>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <div>
+        <h2>Свои голоса</h2>
+        <span class="sub">Голоса, которые звучат в чате. Движок выбирается отдельно для каждого голоса,
+          голос по умолчанию задаётся во вкладке «Опрос».</span>
+      </div>
+      <span class="badge spacer" id="voiceCount"></span>
+    </div>
+    <div class="vlist" id="custom"></div>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <div>
+        <h2>Добавить голос по записям</h2>
+        <span class="sub">Клонирование: программа сама нарежет запись на фразы, выровняет громкость
+          и снимет слепок голоса.</span>
+      </div>
+    </div>
+    <div class="grid-2">
+      <div class="field">
+        <label for="name">Имя голоса — так его будут вызывать в чате</label>
+        <input type="text" id="name" maxlength="40" placeholder="например: Геральт">
+      </div>
+      <div class="field">
+        <label for="aliases">Другие имена, через запятую (необязательно)</label>
+        <input type="text" id="aliases" placeholder="geralt, ведьмак">
+      </div>
     </div>
     <div class="drop" id="drop">
       <b>Перетащите сюда файлы с голосом</b>
@@ -29,35 +70,42 @@
     </div>
     <input type="file" id="fileInput" multiple hidden accept="audio/*,video/*,.mp3,.wav,.ogg,.flac,.m4a,.opus,.mp4,.mkv,.webm">
     <ul class="files" id="files"></ul>
-    <div class="row" style="margin-top:12px">
-      <button class="primary fit" id="createBtn">Создать голос</button>
+    <div class="row" style="margin-top:16px">
+      <button class="btn primary fit" id="createBtn">Создать голос</button>
       <span class="muted" id="progress"></span>
     </div>
     <div class="err" id="createErr"></div>
     <div id="result"></div>
-    <ol class="tips" style="margin-top:12px">
-      <li>Нужно 20–60 секунд речи одного персонажа. Минимум — 6–10 секунд.</li>
-      <li>Чем чище запись, тем лучше: без музыки, без других голосов и шума. Музыку программа не убирает.</li>
-      <li>Длинные паузы программа уберёт сама, короткие оставит - в них интонация. Громкость выравнивается целиком, поэтому перепады сохраняются.</li>
-      <li>Тон голоса можно подстроить под запись: кнопка «Подстроить тон» в списке голосов.</li>
-      <li>Спокойная обычная речь даёт лучший результат, чем крики и шёпот.</li>
-    </ol>
+    <details class="disclosure">
+      <summary>Как подготовить запись</summary>
+      <ol class="tips">
+        <li>Нужно 20–60 секунд речи одного персонажа. Минимум — 6–10 секунд.</li>
+        <li>Чем чище запись, тем лучше: без музыки, без других голосов и шума. Музыку программа не убирает.</li>
+        <li>Длинные паузы программа уберёт сама, короткие оставит — в них интонация. Громкость выравнивается целиком, поэтому перепады сохраняются.</li>
+        <li>Тон голоса можно подстроить под запись: кнопка «Подстроить тон» в списке голосов.</li>
+        <li>Спокойная обычная речь даёт лучший результат, чем крики и шёпот.</li>
+      </ol>
+    </details>
   </section>
 
   <section class="card">
-    <h2>Обучить свою RVC-модель из записей</h2>
-    <div class="hint">Своя модель персонажа на ваших записях: программа обучит её и добавит в список голосов.
-      Нужно 5–10 минут чистой речи одного человека. Обучение идёт на видеокарте (обычно 10–60 минут),
-      на это время лучше отключить чат. Нужен установленный Applio.</div>
-    <div class="row" style="margin-bottom:10px">
+    <div class="card-head">
+      <div>
+        <h2>Обучить свою RVC-модель <span class="badge">RVC</span></h2>
+        <span class="sub">Своя модель персонажа на ваших записях: программа обучит её и добавит в список голосов.
+          Нужно 5–10 минут чистой речи одного человека. Обучение идёт на видеокарте (обычно 10–60 минут),
+          на это время лучше отключить чат. Требуется установленный Applio.</span>
+      </div>
+    </div>
+    <div class="row wrap" style="margin-bottom:16px">
       <span class="pill fit" id="pillRvc">RVC: не подключён</span>
       <input type="text" id="applio" placeholder="папка Applio, например D:\Applio">
-      <button class="fit" id="applioBtn">Подключить Applio</button>
+      <button class="btn fit" id="applioBtn">Подключить Applio</button>
     </div>
     <div class="err" id="applioErr"></div>
-    <details id="rvcHelp" style="margin-bottom:12px">
-      <summary class="muted" style="cursor:pointer">Как установить Applio (нужно один раз)</summary>
-      <ol class="tips" style="margin-top:8px">
+    <details class="disclosure" id="rvcHelp">
+      <summary>Как установить Applio (нужно один раз)</summary>
+      <ol class="tips">
         <li>Скачайте последнюю версию Applio со страницы релизов: github.com/IAHispano/Applio/releases</li>
         <li>Распакуйте в отдельную папку <b>без пробелов и русских букв</b> в пути, например <code>D:\Applio</code>.</li>
         <li>Запустите в ней <code>run-install.bat</code> (не от имени администратора) и дождитесь конца установки.</li>
@@ -65,55 +113,51 @@
         <li>Впишите папку выше и нажмите «Подключить Applio».</li>
       </ol>
     </details>
-    <div class="row field" style="margin-top:12px">
-      <div><label>Имя голоса — так его будут вызывать в чате</label><input type="text" id="tName" maxlength="40" placeholder="например: Геральт"></div>
-      <div><label>Другие имена, через запятую</label><input type="text" id="tAliases" placeholder="geralt, ведьмак"></div>
+    <div class="grid-2" style="margin-top:16px">
+      <div class="field">
+        <label for="tName">Имя голоса — так его будут вызывать в чате</label>
+        <input type="text" id="tName" maxlength="40" placeholder="например: Геральт">
+      </div>
+      <div class="field">
+        <label for="tAliases">Другие имена, через запятую</label>
+        <input type="text" id="tAliases" placeholder="geralt, ведьмак">
+      </div>
     </div>
-    <div class="row field">
-      <div><label>Эпох обучения (больше — точнее и дольше)</label><input type="number" id="tEpochs" value="200" min="50" max="2000" step="50"></div>
-      <div style="flex:0 0 150px"><label>Размер пакета</label><input type="number" id="tBatch" value="4" min="1" max="16"></div>
-      <div><label>Базовый голос — им читается текст</label><select id="tBase"></select></div>
+    <div class="grid-3">
+      <div class="field">
+        <label for="tEpochs">Эпох обучения (больше — точнее и дольше)</label>
+        <input type="number" id="tEpochs" value="200" min="50" max="2000" step="50">
+      </div>
+      <div class="field">
+        <label for="tBatch">Размер пакета</label>
+        <input type="number" id="tBatch" value="4" min="1" max="16">
+      </div>
+      <div class="field">
+        <label for="tBase">Базовый голос — им читается текст</label>
+        <select id="tBase"></select>
+      </div>
     </div>
-    <div class="drop" id="tDrop" style="padding:16px 14px">
+    <div class="drop" id="tDrop">
       <b>Перетащите сюда записи голоса</b>
       wav, mp3, flac, ogg, m4a, mp4 — чем чище запись, тем лучше результат
     </div>
-    <input type="file" id="tFileInput" multiple hidden accept="audio/*,video/*,.wav,.mp3,.flac,.ogg,.m4a,.opus,.mp4,.mkv,.webm">
+    <input type="file" id="tFileInput" multiple hidden accept="audio/*,video/*,.mp3,.wav,.flac,.ogg,.m4a,.opus,.mp4,.mkv,.webm">
     <ul class="files" id="tFiles"></ul>
-    <div class="row" style="margin-top:12px">
-      <button class="primary fit" id="tStart">Обучить модель</button>
-      <button class="fit" id="tCancel" disabled>Отменить</button>
+    <div class="row" style="margin-top:16px">
+      <button class="btn primary fit" id="tStart">Обучить модель</button>
+      <button class="btn fit" id="tCancel" disabled>Отменить</button>
       <span class="muted" id="tProgress"></span>
     </div>
     <div class="bar" id="tBar"><i></i></div>
     <div class="err" id="tErr"></div>
     <div id="tResult"></div>
-    <details id="tLogWrap" style="margin-top:10px">
-      <summary class="muted" style="cursor:pointer">Журнал обучения</summary>
+    <details class="disclosure" id="tLogWrap">
+      <summary>Журнал обучения</summary>
       <pre class="logbox" id="tLog"></pre>
     </details>
   </section>
 
-  <section class="card">
-    <h2>CosyVoice 3 — второй движок озвучки</h2>
-    <div class="hint">CosyVoice 3 звучит именно так, как записано: переносит интонацию и тембр записи,
-      а XTTS их перерисовывает по тексту. Работает со своими голосами — каждому нужен кусок записи и точный текст этого куска.
-      Озвучка примерно втрое медленнее XTTS и требует отдельной папки с моделью (9 ГБ).</div>
-    <div class="row" style="margin-bottom:10px">
-      <span class="pill fit" id="pillCv">CosyVoice 3: не подключён</span>
-      <input type="text" id="cvPath" placeholder="папка CosyVoice 3, например C:\CosyVoice (путь без кириллицы)">
-      <button class="fit" id="cvBtn">Подключить</button>
-    </div>
-    <div class="err" id="cvErr"></div>
-    <div class="hint">После подключения у каждого своего голоса появится выбор движка: XTTS (быстро) или CosyVoice 3 (точнее по интонации).</div>
-  </section>
-
-  <section class="card">
-    <h2>Свои голоса</h2>
-    <div class="vlist" id="custom"></div>
-  </section>
-
-/div>
+</div>
 
 <script>
 const $ = id => document.getElementById(id);
@@ -222,96 +266,118 @@ async function preview(id, btn) {
 }
 function voiceRow(v) {
   const row = el('div', 'voice' + (v.enabled ? '' : ' off'));
+  const engine = v.engine || 'xtts';
+
   const info = el('div', 'grow');
-  info.append(el('div', 'vname', v.name));
+  const title = el('div', 'vname');
+  title.append(el('span', null, v.name));
+  if (v.kind === 'rvc') title.append(el('span', 'badge', 'RVC'));
+  else title.append(el('span', 'badge' + (engine === 'cosy' ? ' accent' : ''),
+    engine === 'cosy' ? 'CosyVoice 3' : 'XTTS'));
+  info.append(title);
   const meta = el('div', 'vmeta');
   meta.append('в чате: '); meta.append(el('code', null, '!г ' + v.name.toLowerCase()));
-  if (v.aliases.length) meta.append(' · также: ' + v.aliases.join(', '));
-  if (v.seconds) meta.append(' · ' + v.seconds + ' с образцов');
-  if (v.kind === 'rvc') meta.append(' · модель RVC' + (v.has_index ? '' : ' (без .index)'));
-  info.append(meta); row.append(info);
+  if (v.aliases.length) meta.append('· также: ' + v.aliases.join(', '));
+  if (v.seconds) meta.append('· ' + v.seconds + ' с образцов');
+  if (v.kind === 'rvc') meta.append('· модель RVC' + (v.has_index ? '' : ' (без .index)'));
+  info.append(meta);
+  row.append(info);
+
+  const ctrl = el('div', 'vctrl');
   if (v.kind === 'custom') {
     const box = el('div', 'pitchbox');
     const pitch = document.createElement('input'); pitch.type = 'number';
     pitch.min = -24; pitch.max = 24; pitch.step = 0.5;
-    pitch.value = v.pitch || 0; pitch.style.width = '68px';
+    pitch.value = v.pitch || 0;
     pitch.title = 'Сдвиг тона голоса в полутонах (вниз - ниже, вверх - выше)';
     const save = async () => {
       const r = await api('/api/voice/pitch', {voice: v.id, pitch: +pitch.value || 0});
       if (!r.ok) alert(r.error); else load();
     };
     pitch.onchange = save;
-    box.append(el('span', 'muted', 'тон '));
+    box.append(el('span', 'tone-label', 'тон'));
     box.append(pitch);
-    if (v.ref_f0) box.append(el('span', 'muted', ' эталон ' + Math.round(v.ref_f0) + ' Гц'));
-    const cal = el('button', 'small', 'Подстроить тон');
+    if (v.ref_f0) box.append(el('span', 'tone-label', 'эталон ' + Math.round(v.ref_f0) + ' Гц'));
+    const cal = el('button', 'btn small secondary', 'Подстроить тон');
     cal.title = 'Подобрать сдвиг тона, чтобы голос звучал на высоте записи-эталона';
     cal.onclick = async () => {
-      cal.disabled = true; const old = cal.textContent; cal.textContent = 'Подбираю…';
+      cal.disabled = true; cal.classList.add('loading'); const old = cal.textContent;
       const r = await api('/api/voice/calibrate', {voice: v.id});
-      cal.disabled = false; cal.textContent = old;
+      cal.disabled = false; cal.classList.remove('loading'); cal.textContent = old;
       if (!r.ok) alert(r.error); else load();
     };
     box.append(cal);
-    row.append(box);
-    const sel = document.createElement('select');
-    sel.className = 'engsel';
-    sel.title = 'Движок озвучки этого голоса';
-    sel.append(new Option('XTTS', 'xtts'));
-    sel.append(new Option('CosyVoice 3', 'cosy'));
-    sel.value = v.engine || 'xtts';
-    sel.onchange = async () => {
-      const r = await api('/api/voice/engine', {voice: v.id, engine: sel.value});
-      if (!r.ok) { alert(r.error); load(); } else load();
+    ctrl.append(box);
+
+    const seg = el('div', 'seg');
+    seg.setAttribute('role', 'radiogroup');
+    seg.setAttribute('aria-label', 'Движок озвучки голоса');
+    const mkEngine = (label, val) => {
+      const b = el('button', engine === val ? 'on' : '', label);
+      b.type = 'button';
+      b.setAttribute('role', 'radio');
+      b.setAttribute('aria-checked', engine === val ? 'true' : 'false');
+      b.onclick = async () => {
+        if (engine === val) return;
+        const r = await api('/api/voice/engine', {voice: v.id, engine: val});
+        if (!r.ok) { alert(r.error); load(); } else load();
+      };
+      return b;
     };
-    row.append(sel);
-    if ((v.engine || 'xtts') === 'cosy') {
-      const cbox = el('div', 'cvbox');
-      cbox.append(el('span', 'muted', v.cv_ready
-        ? ('образец ' + (v.cv_seconds || 0) + ' с — текст образца:')
-        : 'Образец не подготовлен.'));
-      const ta = document.createElement('textarea');
-      ta.rows = 2;
-      ta.value = v.cv_text || '';
-      ta.placeholder = 'Что сказано в образце записи';
-      cbox.append(ta);
-      const save = el('button', 'small', 'Сохранить текст');
-      save.onclick = async () => {
-        const r = await api('/api/voice/transcript', {voice: v.id, text: ta.value});
-        if (!r.ok) alert(r.error); else load();
-      };
-      const prep = el('button', 'small', v.cv_ready ? 'Пересобрать образец' : 'Подготовить образец');
-      prep.onclick = async () => {
-        prep.disabled = true; const old = prep.textContent; prep.textContent = 'Готовлю…';
-        const r = await api('/api/voice/cosyvoice', {voice: v.id});
-        prep.disabled = false; prep.textContent = old;
-        if (!r.ok) alert(r.error); else load();
-      };
-      cbox.append(save, prep);
-      row.append(cbox);
-    }
+    seg.append(mkEngine('XTTS', 'xtts'), mkEngine('CosyVoice 3', 'cosy'));
+    ctrl.append(seg);
   }
   if (v.kind === 'rvc') {
-    const base = document.createElement('select'); base.style.width = '170px'; base.title = 'Базовый голос';
+    const base = document.createElement('select');
+    base.style.width = '180px'; base.title = 'Базовый голос';
     baseOptions(base, v.base);
     const pitch = document.createElement('input'); pitch.type = 'number'; pitch.min = -24; pitch.max = 24;
     pitch.value = v.pitch; pitch.style.width = '70px'; pitch.title = 'Сдвиг тона, полутонов';
     const save = async () => { await api('/api/rvc/update', {voice: v.id, base: base.value, pitch: +pitch.value || 0}); };
     base.onchange = save; pitch.onchange = save;
-    row.append(base, pitch);
+    ctrl.append(base, pitch);
   }
-  const play = el('button', 'small', '▶ Послушать'); play.onclick = () => preview(v.id, play);
-  const tog = el('button', 'small', v.enabled ? 'Выключить' : 'Включить');
+  const play = el('button', 'btn small secondary', '▶ Послушать'); play.onclick = () => preview(v.id, play);
+  const tog = el('button', 'btn small ghost', v.enabled ? 'Выключить' : 'Включить');
   tog.onclick = async () => { await api('/api/voices/toggle', {voice: v.id, enabled: !v.enabled}); load(); };
-  row.append(play, tog);
+  ctrl.append(play, tog);
   if (v.kind !== 'standard') {
-    const del = el('button', 'small danger', 'Удалить');
+    const del = el('button', 'btn small danger', 'Удалить');
     del.onclick = async () => {
       if (!confirm('Удалить голос «' + v.name + '» насовсем?')) return;
       const r = await api('/api/voices/' + encodeURIComponent(v.id), null, 'DELETE');
       if (!r.ok) alert(r.error); load();
     };
-    row.append(del);
+    ctrl.append(del);
+  }
+  row.append(ctrl);
+
+  if (v.kind === 'custom' && engine === 'cosy') {
+    const cbox = el('div', 'cvbox');
+    cbox.append(el('span', 'muted', v.cv_ready
+      ? ('образец ' + (v.cv_seconds || 0) + ' с — текст образца:')
+      : 'Образец не подготовлен.'));
+    const ta = document.createElement('textarea');
+    ta.rows = 2;
+    ta.value = v.cv_text || '';
+    ta.placeholder = 'Что сказано в образце записи';
+    cbox.append(ta);
+    const save = el('button', 'btn small secondary', 'Сохранить текст');
+    save.onclick = async () => {
+      const r = await api('/api/voice/transcript', {voice: v.id, text: ta.value});
+      if (!r.ok) alert(r.error); else load();
+    };
+    const prep = el('button', 'btn small secondary', v.cv_ready ? 'Пересобрать образец' : 'Подготовить образец');
+    prep.onclick = async () => {
+      prep.disabled = true; prep.classList.add('loading'); const old = prep.textContent;
+      const r = await api('/api/voice/cosyvoice', {voice: v.id});
+      prep.disabled = false; prep.classList.remove('loading'); prep.textContent = old;
+      if (!r.ok) alert(r.error); else load();
+    };
+    const actions = el('div', 'cvactions');
+    actions.append(save, prep);
+    cbox.append(actions);
+    row.append(cbox);
   }
   return row;
 }
@@ -335,14 +401,20 @@ function renderPills() {
 }
 function renderLists() {
   baseOptions($('tBase'), $('tBase').value);
-  for (const kind of ['custom']) {
-    const box = $(kind); box.replaceChildren();
-    const list = voices.filter(v => v.kind !== 'standard');
-    list.forEach(v => box.append(voiceRow(v)));
-    if (!list.length) box.append(el('div', 'muted', 'Пока нет. Добавьте первый голос в форме выше.'));
+  const box = $('custom');
+  box.replaceChildren();
+  const list = voices.filter(v => v.kind !== 'standard');
+  list.forEach(v => box.append(voiceRow(v)));
+  if (!list.length) {
+    const empty = el('div', 'empty-state');
+    empty.append(el('div', 'ico', '♪'));
+    empty.append(el('b', null, 'Пока ни одного голоса'));
+    empty.append(el('div', 'muted', 'Добавьте первый голос из записей — это занимает пару минут.'));
+    box.append(empty);
   }
+  const cnt = $('voiceCount');
+  if (cnt) cnt.textContent = list.length ? list.length + ' шт.' : '';
 }
-
 // ---------- обучение RVC из записей ----------
 let tPicked = [], trainTimer = null;
 function renderTFiles() {
