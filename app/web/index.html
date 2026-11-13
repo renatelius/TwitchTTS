@@ -5,6 +5,7 @@
 <title>Чат — озвучка Twitch</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="stylesheet" href="/static/style.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%238b5cf6'/%3E%3Ctext x='16' y='23' font-size='19' text-anchor='middle' fill='white' font-family='sans-serif'%3E%E2%99%AA%3C/text%3E%3C/svg%3E">
 </head>
 <body>
 <div id="unlock">
@@ -42,7 +43,7 @@
         </div>
       </div>
       <div class="row">
-        <input type="text" id="channel" placeholder="имя канала или ссылка">
+        <input type="text" id="channel" placeholder="канал или ссылка">
         <button class="btn primary fit" id="connectBtn">Подключить</button>
       </div>
       <div class="err" id="connErr"></div>
@@ -56,10 +57,10 @@
         </div>
       </div>
       <div class="now" id="now"><span class="muted">тишина</span></div>
-      <div class="row" style="margin-top:14px">
-        <button class="btn secondary fit" id="pauseBtn">Пауза</button>
-        <button class="btn secondary fit" id="skipBtn">Пропустить</button>
-        <button class="btn danger fit" id="clearBtn">Очистить</button>
+      <div class="btn-row" style="margin-top:14px">
+        <button class="btn secondary" id="pauseBtn">Пауза</button>
+        <button class="btn secondary" id="skipBtn">Пропустить</button>
+        <button class="btn danger" id="clearBtn">Очистить</button>
       </div>
       <div class="field" style="margin-top:16px">
         <label for="volume">Громкость: <span id="volVal"></span></label>
@@ -84,10 +85,11 @@
           <span class="sub">Проговорить фразу выбранным голосом.</span>
         </div>
       </div>
-      <div class="row">
+      <div class="field" style="margin-bottom:var(--sp-3)">
+        <label for="testText">Фраза для проверки звука</label>
         <input type="text" id="testText" value="Привет, чат! Hello everyone!">
-        <button class="btn fit" id="testBtn">Сказать</button>
       </div>
+      <button class="btn" id="testBtn">Сказать голосом</button>
       <div class="err" id="testErr"></div>
     </div>
 

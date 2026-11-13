@@ -22,6 +22,9 @@ VoiceReader/
 старые-голоса/
 *.zip
 
+# Отчёты аудита вёрстки
+tools/audit_out/
+
 # Логи и мусор
 *.log
 *.wav

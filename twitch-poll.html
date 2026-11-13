@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Голосование в чате Twitch</title>
 <link rel="stylesheet" href="/static/style.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%238b5cf6'/%3E%3Ctext x='16' y='23' font-size='19' text-anchor='middle' fill='white' font-family='sans-serif'%3E%E2%99%AA%3C/text%3E%3C/svg%3E">
 <script>
   // Внутри приложения TwitchTTS страница включается как вкладка, отдельно - как обычный файл.
   document.documentElement.setAttribute("data-mode", location.protocol === "file:" ? "file" : "app");
@@ -74,10 +75,13 @@
   --font-mono: "JetBrains Mono", "Cascadia Mono", ui-monospace, Consolas, monospace;
   --fs-xs: 12px;
   --fs-sm: 13px;
-  --fs-md: 14px;
-  --fs-lg: 16px;
-  --fs-xl: 20px;
-  --fs-2xl: 26px;
+  --fs-md: 15px;
+  --fs-lg: 17px;
+  --fs-xl: 21px;
+  --fs-2xl: 28px;
+
+  /* ширина рабочей колонки */
+  --shell: 1320px;
 
   /* тени */
   --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.35);
@@ -130,6 +134,16 @@ code {
   border-radius: var(--r-sm);
 }
 
+.seg button:focus-visible,
+.segmented a:focus-visible,
+.segmented button:focus-visible,
+.chip:focus-visible,
+.tab:focus-visible,
+.vcard summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 /* ============================ шапка ============================ */
 
 .topbar {
@@ -139,7 +153,7 @@ code {
   display: flex;
   align-items: center;
   gap: var(--sp-4);
-  padding: 0 var(--sp-5);
+  padding: 0 max(var(--sp-5), calc((100% - var(--shell)) / 2));
   height: 56px;
   min-height: 56px;
   flex-wrap: wrap;
@@ -314,6 +328,14 @@ code {
 .btn.danger:hover { background: var(--bad-soft); border-color: var(--bad); }
 
 .btn.small { padding: 6px 10px; font-size: var(--fs-sm); border-radius: var(--r-sm); }
+
+/* ряд кнопок одинаковой ширины */
+.btn-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
+  gap: var(--sp-2);
+}
+.btn-row > .btn { width: 100%; padding-left: var(--sp-2); padding-right: var(--sp-2); }
 .btn.icon { padding: 7px 9px; }
 
 /* кнопка со спиннером */
@@ -401,6 +423,11 @@ input[type="range"] {
   transition: border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
 }
 .check:hover { border-color: var(--border-strong); }
+.check:has(input:checked) {
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+}
+.check:has(input:focus-visible) { border-color: var(--accent); }
 .check input {
   width: 16px;
   height: 16px;
@@ -412,7 +439,7 @@ input[type="range"] {
 /* ============================ карточки ============================ */
 
 .page {
-  max-width: 1180px;
+  max-width: var(--shell);
   margin: 0 auto;
   padding: var(--sp-6) var(--sp-5) var(--sp-7);
   display: grid;
@@ -420,6 +447,7 @@ input[type="range"] {
 }
 
 .card {
+  min-width: 0;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
@@ -474,6 +502,8 @@ input[type="range"] {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--sp-4);
 }
+.grid-2 > *,
+.grid-3 > * { min-width: 0; }
 .field { margin-bottom: var(--sp-4); }
 .field:last-child { margin-bottom: 0; }
 
@@ -746,10 +776,12 @@ ol.tips li { margin: 4px 0; }
 
 .layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 340px;
+  grid-template-columns: minmax(0, 1fr) 360px;
   gap: var(--sp-4);
   padding: var(--sp-4);
   height: calc(100vh - 56px);
+  max-width: var(--shell);
+  margin: 0 auto;
 }
 .chat { display: flex; flex-direction: column; min-height: 0; padding: 0; overflow: hidden; }
 .chat-head {
@@ -764,7 +796,7 @@ ol.tips li { margin: 4px 0; }
 .msg {
   padding: 7px 11px;
   border-radius: var(--r-sm);
-  font-size: 17px;
+  font-size: 18px;
   line-height: 1.45;
   word-break: break-word;
   border-left: 3px solid transparent;
@@ -775,7 +807,31 @@ ol.tips li { margin: 4px 0; }
 .msg.wait { border-left-color: var(--border-strong); }
 .msg.speaking { background: var(--accent-soft); border-left-color: var(--accent); }
 .msg.note { font-size: var(--fs-sm); color: var(--text-muted); font-style: italic; }
-.empty { color: var(--text-muted); text-align: center; margin-top: 18vh; font-size: var(--fs-md); }
+.empty { color: var(--text-muted); text-align: center; font-size: var(--fs-md); }
+
+/* пустое состояние чата */
+#chat .empty {
+  margin: 0;
+  min-height: 100%;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: var(--sp-1);
+  padding: var(--sp-6) var(--sp-4);
+}
+#chat .empty::before {
+  content: "\266A";
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 18px;
+  margin-bottom: var(--sp-2);
+}
 .side { display: flex; flex-direction: column; gap: var(--sp-3); overflow-y: auto; min-height: 0; }
 .now { font-size: var(--fs-md); min-height: 44px; }
 .now b { color: var(--accent-text); }
@@ -818,7 +874,7 @@ header {
   display: flex;
   align-items: center;
   gap: var(--sp-4);
-  padding: 0 var(--sp-5);
+  padding: 0 max(var(--sp-5), calc((100% - var(--shell)) / 2));
   height: 56px;
   min-height: 56px;
   flex-wrap: wrap;
@@ -858,14 +914,32 @@ body.embed .layout { grid-template-columns: minmax(0, 1fr); height: 100vh; paddi
 body.embed .chat { min-height: 0; }
 body.embed .side {
   flex-direction: row;
+  flex-wrap: wrap;
   align-items: stretch;
-  overflow-x: auto;
-  overflow-y: hidden;
+  overflow: visible;
   padding: var(--sp-2);
   gap: var(--sp-2);
 }
-body.embed .side .card { flex: none; min-width: 235px; }
+body.embed .side .card { flex: 1 1 230px; min-width: 0; }
 body.embed .side > button { align-self: flex-start; }
+
+/* заглушка звука во встроенном чате — компактная полоса, а не блокировка экрана */
+body.embed { position: relative; }
+body.embed #unlock {
+  position: absolute;
+  inset: 0 0 auto 0;
+  background: linear-gradient(to bottom, rgba(11, 12, 16, 0.96), rgba(11, 12, 16, 0.78));
+  backdrop-filter: blur(6px);
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+body.embed #unlock .btn { font-size: var(--fs-sm); padding: 8px 16px; }
+body.embed #unlock .muted { font-size: var(--fs-xs); line-height: 1.4; }
 body.embed .side .hint { display: none; }
 body.embed #unlock { padding: var(--sp-5); }
 
@@ -924,6 +998,8 @@ dialog .row.field { margin-bottom: var(--sp-3); }
 
 /* ============================ страница «Опрос» ============================ */
 
+body.tab-poll, body.tab-chat, body.tab-voice { --shell: 1560px; }
+
 :root {
   --c1: #fbbf24;   /* вариант 1 / писал в чат */
   --c2: #4fd1c1;   /* вариант 2 / молчит в чате */
@@ -932,7 +1008,7 @@ dialog .row.field { margin-bottom: var(--sp-3); }
 }
 
 .pollbar {
-  max-width: 1240px;
+  max-width: var(--shell);
   margin: 0 auto;
   padding: var(--sp-5) var(--sp-5) 0;
   display: flex;
@@ -945,11 +1021,11 @@ html[data-mode="app"] .pollbar .brand { display: none; }
 .pollbar .brand { font-weight: 620; color: var(--text-muted); font-size: var(--fs-md); }
 
 .app {
-  max-width: 1240px;
+  max-width: var(--shell);
   margin: 0 auto;
   padding: var(--sp-4) var(--sp-5) var(--sp-7);
   display: grid;
-  grid-template-columns: 350px minmax(0, 1fr);
+  grid-template-columns: minmax(320px, 360px) minmax(0, 1fr);
   gap: var(--sp-4);
   align-items: start;
 }
@@ -957,6 +1033,7 @@ body.compact .left { display: none; }
 body.compact .app { grid-template-columns: minmax(0, 1fr); max-width: 860px; }
 
 .left, .right { display: grid; gap: var(--sp-4); min-width: 0; align-content: start; }
+.left > *, .right > * { min-width: 0; }
 
 .label {
   display: block;
@@ -966,6 +1043,21 @@ body.compact .app { grid-template-columns: minmax(0, 1fr); max-width: 860px; }
   margin-bottom: 6px;
 }
 .settings { display: grid; gap: var(--sp-4); }
+.settings .settings-group { margin-top: 0; }
+.settings .settings-group.first {
+  padding-top: 0;
+  margin-top: 0;
+  border-top: 0;
+}
+.settings .settings-group .group-title {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: var(--fs-xs);
+  color: var(--text-dim);
+}
 .settings .card-head { margin-bottom: 0; }
 .settings .field { margin-bottom: 0; }
 
@@ -1024,12 +1116,20 @@ button.main.stop:hover { background: #fb7185; border-color: #fb7185; }
 .status.wait i { background: var(--warn); animation: pulse 1.4s var(--ease) infinite; }
 .status.err i { background: var(--bad); }
 
-.stage { padding: var(--sp-6); min-height: 440px; }
-.head {
-  display: flex; justify-content: space-between; align-items: baseline;
-  gap: var(--sp-4); flex-wrap: wrap; margin-bottom: var(--sp-5);
+.stage {
+  padding: var(--sp-6);
+  min-height: 440px;
+  background:
+    radial-gradient(1100px 300px at 100% 0%, rgba(139, 92, 246, 0.07), transparent 70%),
+    var(--surface);
 }
-.headline { font-size: var(--fs-md); color: var(--text-muted); max-width: 52ch; }
+.head {
+  display: flex; justify-content: space-between; align-items: center;
+  gap: var(--sp-4); flex-wrap: wrap; margin-bottom: var(--sp-5);
+  padding-bottom: var(--sp-4);
+  border-bottom: 1px solid var(--border);
+}
+.headline { font-size: var(--fs-lg); color: var(--text); max-width: 60ch; font-weight: 500; }
 .headline b { color: var(--text); font-weight: 600; }
 .timer {
   font-weight: 700;
@@ -1037,23 +1137,31 @@ button.main.stop:hover { background: #fb7185; border-color: #fb7185; }
   line-height: 1;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.03em;
+  padding: var(--sp-2) var(--sp-4);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
 }
-.timer.low { color: var(--bad); }
-.timer.done { font-size: 26px; color: var(--text-muted); }
+.timer.low { color: var(--bad); border-color: rgba(248, 113, 113, 0.35); }
+.timer.done { font-size: 22px; color: var(--text-muted); }
 
-.bars { display: grid; gap: var(--sp-4); }
+.bars { display: grid; gap: var(--sp-3); }
 /* .bar в общих стилях — это прогресс-бар обучения RVC, поэтому здесь правила свои */
 .bars .bar {
   display: grid;
   grid-template-columns: 44px minmax(0, 1fr);
-  gap: 14px;
+  gap: var(--sp-4);
   align-items: center;
   height: auto;
   margin-top: 0;
-  background: none;
-  border-radius: 0;
+  padding: var(--sp-4);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
   overflow: visible;
+  transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease);
 }
+.bars .bar.win { border-color: var(--accent-line); background: var(--accent-soft); }
 .bars .bar .num {
   width: 44px; height: 44px; border-radius: 50%;
   display: grid; place-items: center;
@@ -1070,7 +1178,7 @@ button.main.stop:hover { background: #fb7185; border-color: #fb7185; }
 }
 .bars .bar .top .name { overflow-wrap: anywhere; }
 .bars .bar .top .val { color: var(--text-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.track { height: 14px; background: var(--bg); border-radius: 999px; overflow: hidden; }
+.track { height: 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 999px; overflow: hidden; }
 .fill {
   height: 100%; width: 0; background: var(--c);
   border-radius: 999px; transition: width var(--dur-slow) var(--ease);
@@ -1097,13 +1205,27 @@ button.main.stop:hover { background: #fb7185; border-color: #fb7185; }
   color: var(--text-muted); font-size: var(--fs-sm);
 }
 .feed { margin-top: 10px; font-size: var(--fs-sm); color: var(--text-muted); min-height: 20px; overflow-wrap: anywhere; }
-.tools { display: flex; gap: var(--sp-2); flex-wrap: wrap; align-items: center; margin-top: var(--sp-4); }
+.tools {
+  display: flex; gap: var(--sp-2); flex-wrap: wrap; align-items: center;
+  margin-top: var(--sp-5);
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+}
 .tools .label { margin: 0 4px 0 0; }
 
 .rhead {
   display: flex; justify-content: space-between; align-items: center;
   gap: var(--sp-3); flex-wrap: wrap; margin-bottom: var(--sp-4);
 }
+.rhead h2 {
+  font-size: var(--fs-lg);
+  font-weight: 620;
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+.rhead .check { padding: 5px 10px; font-size: var(--fs-sm); }
 .vcount { font-size: var(--fs-sm); color: var(--text-muted); }
 .vsum { font-size: var(--fs-md); margin: 0 0 var(--sp-3); color: var(--text-muted); }
 .vlist { display: grid; gap: var(--sp-2); max-height: 560px; overflow: auto; }
@@ -1124,15 +1246,57 @@ button.main.stop:hover { background: #fb7185; border-color: #fb7185; }
 }
 .vdesc { margin: 0; padding: 10px 14px 14px; font-size: var(--fs-sm); color: var(--text-muted); }
 
-.rstats { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: var(--sp-3); }
-.rstats b {
-  display: block; font-size: 26px; font-weight: 700; line-height: 1.15;
-  font-variant-numeric: tabular-nums;
+.rstats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(140px, 100%), 1fr));
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-5);
 }
-.rstats span { font-size: var(--fs-sm); color: var(--text-muted); }
-.radarwrap { position: relative; display: flex; justify-content: center; margin: var(--sp-5) 0 var(--sp-3); }
+.rstats > div {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: var(--sp-3) var(--sp-4);
+  display: grid;
+  gap: 3px;
+  align-content: start;
+  min-width: 0;
+}
+.rstats > div:first-child {
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+}
+.rstats b {
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+.rstats > div:first-child b { color: var(--accent-text); }
+.rstats span {
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.radarwrap {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  margin: 0 0 var(--sp-3);
+  padding: var(--sp-5) var(--sp-4);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+}
 #radar {
-  display: block; border-radius: 50%; border: 1px solid var(--border);
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: 50%;
+  border: 1px solid var(--border);
   background: radial-gradient(circle, #1a1e29 0%, #111318 100%);
 }
 .tip {
@@ -1141,20 +1305,61 @@ button.main.stop:hover { background: #fb7185; border-color: #fb7185; }
   border-radius: var(--r-sm); padding: 6px 10px; font-size: var(--fs-sm);
   white-space: pre; box-shadow: var(--shadow-2);
 }
-.legend { display: flex; gap: var(--sp-4); flex-wrap: wrap; justify-content: center; font-size: var(--fs-sm); color: var(--text-muted); }
+.legend {
+  display: flex;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+  justify-content: center;
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+.legend span {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 11px;
+  border-radius: var(--r-full);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
 .legend i {
   display: inline-block; width: 10px; height: 10px; border-radius: 50%;
   margin-right: 6px; vertical-align: -1px; box-sizing: content-box;
 }
-.lists { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--sp-4); margin-top: var(--sp-5); }
-.lists h3 { font-size: var(--fs-md); font-weight: 600; margin: 0 0 var(--sp-2); }
+.lists {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-4);
+  margin-top: var(--sp-5);
+}
+.list-card {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: var(--sp-3) var(--sp-4) var(--sp-2);
+  min-width: 0;
+}
+.list-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-2);
+}
+.lists h3 {
+  font-size: var(--fs-xs);
+  font-weight: 620;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin: 0;
+}
 .lists ul {
   list-style: none; margin: 0; padding: 0; max-height: 260px; overflow: auto;
-  font-size: var(--fs-sm); border-top: 1px solid var(--border);
+  font-size: var(--fs-sm);
 }
 .lists li {
   display: flex; justify-content: space-between; gap: var(--sp-2);
-  padding: 6px 0; border-bottom: 1px solid var(--border);
+  padding: 7px 0; border-top: 1px solid var(--border);
 }
 .lists li span:first-child { overflow-wrap: anywhere; }
 .lists li span:last-child { color: var(--text-muted); white-space: nowrap; }
@@ -1184,7 +1389,7 @@ button.main.stop:hover { background: #fb7185; border-color: #fb7185; }
 }
 .tts-mini-row button { flex: none; }
 .voice-panel {
-  display: none; max-width: 760px; margin: 0 auto var(--sp-7);
+  display: none; max-width: 920px; margin: 0 auto var(--sp-7);
 }
 body.tab-voice .app { display: none; }
 body.tab-voice .voice-panel { display: block; }
@@ -1196,9 +1401,12 @@ body.tab-chat #compactBtn { display: none; }
 body.hx .notice, body.tab-poll .notice, body.tab-radar .bans { display: none; }
 
 .chatgrid {
-  display: grid; grid-template-columns: minmax(240px, 1fr) minmax(300px, 1.15fr);
-  gap: var(--sp-4); align-items: start;
+  display: grid;
+  grid-template-columns: minmax(280px, 0.9fr) minmax(320px, 1.1fr);
+  gap: var(--sp-4);
+  align-items: start;
 }
+.chatgrid > * { min-width: 0; }
 .chat-embed {
   border: 1px solid var(--border); border-radius: var(--r-lg);
   overflow: hidden; background: var(--bg);
@@ -1208,14 +1416,14 @@ body.hx .notice, body.tab-poll .notice, body.tab-radar .bans { display: none; }
   border: 0; background: var(--bg);
 }
 html[data-mode="file"] .chat-embed { display: none; }
-html[data-mode="file"] .chatgrid { grid-template-columns: 1fr; }
+html[data-mode="file"] .chatgrid { grid-template-columns: minmax(0, 1fr); }
 
 @media (max-width: 1080px) {
   .app { grid-template-columns: minmax(0, 1fr); }
   .lists { grid-template-columns: 1fr; }
   .timer { font-size: 42px; }
 }
-@media (max-width: 980px) { .chatgrid { grid-template-columns: 1fr; } }
+@media (max-width: 980px) { .chatgrid { grid-template-columns: minmax(0, 1fr); } }
 
 </style>
 </head>
@@ -1253,58 +1461,69 @@ html[data-mode="file"] .chatgrid { grid-template-columns: 1fr; }
       </div>
     </div>
 
-    <div class="field">
-      <label for="channel">Канал на Twitch</label>
-      <div class="row">
-        <input type="text" id="channel" placeholder="название_канала" autocomplete="off" spellcheck="false">
-        <button class="btn secondary fit" id="connectBtn" style="flex:none">Подключить</button>
-      </div>
-      <div class="status" id="status"><i></i><span>Не подключено</span></div>
-    </div>
-
-    <div class="field">
-      <span class="label">Варианты ответа</span>
-      <div class="opt"><span class="dot">1</span><input type="text" id="o1" placeholder="Вариант 1" maxlength="60"></div>
-      <div class="opt"><span class="dot">2</span><input type="text" id="o2" placeholder="Вариант 2" maxlength="60"></div>
-      <div class="opt"><span class="dot">3</span><input type="text" id="o3" placeholder="Вариант 3" maxlength="60"></div>
-    </div>
-
-    <div class="field">
-      <span class="label">Время голосования</span>
-      <div class="row">
-        <div><input type="number" id="min" min="0" max="120" value="1" aria-label="Минуты"></div>
-        <div><input type="number" id="sec" min="0" max="59" value="0" aria-label="Секунды"></div>
-      </div>
-      <div class="label" style="margin:4px 0 0; display:flex; gap:8px"><span style="flex:1">минут</span><span style="flex:1">секунд</span></div>
-      <div class="chips">
-        <button class="chip" data-t="30">30 с</button>
-        <button class="chip" data-t="60">1 мин</button>
-        <button class="chip" data-t="120">2 мин</button>
-        <button class="chip" data-t="300">5 мин</button>
-        <button class="chip" data-t="600">10 мин</button>
+    <div class="settings-group first">
+      <div class="group-title">Подключение</div>
+      <div class="field">
+        <label for="channel">Канал на Twitch</label>
+        <div class="row">
+          <input type="text" id="channel" placeholder="название_канала" autocomplete="off" spellcheck="false">
+          <button class="btn secondary fit" id="connectBtn" style="flex:none">Подключить</button>
+        </div>
+        <div class="status" id="status"><i></i><span>Не подключено</span></div>
       </div>
     </div>
 
-    <details class="disclosure bans">
-      <summary>Бан-лист (<span id="banCount">0</span>)</summary>
-      <div id="banList"></div>
-    </details>
+    <div class="settings-group">
+      <div class="group-title">Варианты ответа</div>
+      <div class="field">
+        <div class="opt"><span class="dot">1</span><input type="text" id="o1" placeholder="Вариант 1" maxlength="60"></div>
+        <div class="opt"><span class="dot">2</span><input type="text" id="o2" placeholder="Вариант 2" maxlength="60"></div>
+        <div class="opt"><span class="dot">3</span><input type="text" id="o3" placeholder="Вариант 3" maxlength="60"></div>
+      </div>
+    </div>
 
-    <details class="disclosure adv" open>
-      <summary>Точный список зрителей (токен Twitch)</summary>
-      <p class="label">Без токена Twitch не показывает тех, кто в чате и молчит. Нужен токен владельца или модератора канала со scope moderator:read:chatters: получите его на twitchtokengenerator.com (Custom Scope Token). Данные хранятся только в этом браузере.</p>
-      <input type="text" id="cid" placeholder="Client ID" autocomplete="off" spellcheck="false">
-      <input type="password" id="tok" placeholder="Access Token" autocomplete="off" style="margin-top:8px">
-      <div class="status" id="hxStatus"><i></i><span>Не подключено</span></div>
-    </details>
+    <div class="settings-group">
+      <div class="group-title">Время голосования</div>
+      <div class="field">
+        <div class="row">
+          <div><input type="number" id="min" min="0" max="120" value="1" aria-label="Минуты"></div>
+          <div><input type="number" id="sec" min="0" max="59" value="0" aria-label="Секунды"></div>
+        </div>
+        <div class="label" style="margin:4px 0 0; display:flex; gap:8px"><span style="flex:1">минут</span><span style="flex:1">секунд</span></div>
+        <div class="chips">
+          <button class="chip" data-t="30">30 с</button>
+          <button class="chip" data-t="60">1 мин</button>
+          <button class="chip" data-t="120">2 мин</button>
+          <button class="chip" data-t="300">5 мин</button>
+          <button class="chip" data-t="600">10 мин</button>
+        </div>
+      </div>
+    </div>
 
-    <label class="check"><input type="checkbox" id="allowChange" checked> Зритель может изменить свой голос</label>
+    <div class="settings-group">
+      <div class="group-title">Дополнительно</div>
 
-    <div class="tts-mini">
-      <span class="label">Озвучка объявлений</span>
-      <div class="tts-mini-row">
-        <span id="ttsMiniState">проверка…</span>
-        <button class="btn secondary" id="ttsGo" type="button">Настроить</button>
+      <details class="disclosure bans">
+        <summary>Бан-лист (<span id="banCount">0</span>)</summary>
+        <div id="banList"></div>
+      </details>
+
+      <details class="disclosure adv" open>
+        <summary>Точный список зрителей (токен Twitch)</summary>
+        <p class="label">Без токена Twitch не показывает тех, кто в чате и молчит. Нужен токен владельца или модератора канала со scope moderator:read:chatters: получите его на twitchtokengenerator.com (Custom Scope Token). Данные хранятся только в этом браузере.</p>
+        <input type="text" id="cid" placeholder="Client ID" autocomplete="off" spellcheck="false">
+        <input type="password" id="tok" placeholder="Access Token" autocomplete="off" style="margin-top:8px">
+        <div class="status" id="hxStatus"><i></i><span>Не подключено</span></div>
+      </details>
+
+      <label class="check"><input type="checkbox" id="allowChange" checked> Зритель может изменить свой голос</label>
+
+      <div class="tts-mini">
+        <span class="label">Озвучка объявлений</span>
+        <div class="tts-mini-row">
+          <span id="ttsMiniState">проверка…</span>
+          <button class="btn secondary" id="ttsGo" type="button">Настроить</button>
+        </div>
       </div>
     </div>
 
@@ -1368,8 +1587,14 @@ html[data-mode="file"] .chatgrid { grid-template-columns: 1fr; }
       </div>
     </div>
     <div class="lists">
-      <div><h3>Пришли</h3><ul id="lJoin"></ul></div>
-      <div><h3>Ушли</h3><ul id="lPart"></ul></div>
+      <section class="list-card">
+        <div class="list-head"><h3>Пришли</h3><span class="badge ok" id="joinCount">0</span></div>
+        <ul id="lJoin"></ul>
+      </section>
+      <section class="list-card">
+        <div class="list-head"><h3>Ушли</h3><span class="badge" id="partCount">0</span></div>
+        <ul id="lPart"></ul>
+      </section>
     </div>
     <p class="hint">Чем ближе точка к центру, тем дольше человек в чате. Время считается с момента, когда вы подключились. Без токена радар видит только тех, кто писал: кто молчит 10 минут, считается ушедшим. С токеном (настройки слева) список точный, включая молчащих. Те, кто смотрит стрим и не открывал чат, не видны никому, кроме Twitch.</p>
   </section>
@@ -1934,7 +2159,7 @@ html[data-mode="file"] .chatgrid { grid-template-columns: 1fr; }
   }
 
   function sizeCanvas() {
-    var w = Math.min(560, Math.floor($('radarwrap').clientWidth));
+    var w = Math.min(620, Math.floor($('radarwrap').clientWidth));
     if (w < 240) w = 240;
     var d = window.devicePixelRatio || 1;
     if (w === W && d === dpr) return;
@@ -2056,6 +2281,8 @@ html[data-mode="file"] .chatgrid { grid-template-columns: 1fr; }
   function listFill(id, items) {
     var el = $(id);
     el.textContent = '';
+    var badge = $(id === 'lJoin' ? 'joinCount' : 'partCount');
+    if (badge) badge.textContent = items.length;
     if (!items.length) {
       var e = document.createElement('li');
       e.className = 'empty';

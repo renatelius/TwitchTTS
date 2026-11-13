@@ -7,10 +7,12 @@
 """
 import io
 import os
+import shutil
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CSS = os.path.join(ROOT, 'app', 'web', 'style.css')
 POLL = os.path.join(ROOT, 'app', 'web', 'poll.html')
+STANDALONE = os.path.join(ROOT, 'twitch-poll.html')
 
 MARK = '/* Встроенная копия style.css:'
 TAIL = '/* ============================ страница «Опрос» ============================ */'
@@ -27,3 +29,7 @@ poll = poll[:i] + MARK + ''' страница должна выглядеть о
 
 io.open(POLL, 'w', encoding='utf-8', newline='').write(poll)
 print('poll.html: стили синхронизированы, символов:', len(poll))
+
+# автономная копия страницы (открывается с диска) должна совпадать с основной
+shutil.copyfile(POLL, STANDALONE)
+print('twitch-poll.html: автономная копия обновлена')

@@ -60,10 +60,13 @@
   --font-mono: "JetBrains Mono", "Cascadia Mono", ui-monospace, Consolas, monospace;
   --fs-xs: 12px;
   --fs-sm: 13px;
-  --fs-md: 14px;
-  --fs-lg: 16px;
-  --fs-xl: 20px;
-  --fs-2xl: 26px;
+  --fs-md: 15px;
+  --fs-lg: 17px;
+  --fs-xl: 21px;
+  --fs-2xl: 28px;
+
+  /* ширина рабочей колонки */
+  --shell: 1320px;
 
   /* тени */
   --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.35);
@@ -116,6 +119,16 @@ code {
   border-radius: var(--r-sm);
 }
 
+.seg button:focus-visible,
+.segmented a:focus-visible,
+.segmented button:focus-visible,
+.chip:focus-visible,
+.tab:focus-visible,
+.vcard summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 /* ============================ шапка ============================ */
 
 .topbar {
@@ -125,7 +138,7 @@ code {
   display: flex;
   align-items: center;
   gap: var(--sp-4);
-  padding: 0 var(--sp-5);
+  padding: 0 max(var(--sp-5), calc((100% - var(--shell)) / 2));
   height: 56px;
   min-height: 56px;
   flex-wrap: wrap;
@@ -300,6 +313,14 @@ code {
 .btn.danger:hover { background: var(--bad-soft); border-color: var(--bad); }
 
 .btn.small { padding: 6px 10px; font-size: var(--fs-sm); border-radius: var(--r-sm); }
+
+/* ряд кнопок одинаковой ширины */
+.btn-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
+  gap: var(--sp-2);
+}
+.btn-row > .btn { width: 100%; padding-left: var(--sp-2); padding-right: var(--sp-2); }
 .btn.icon { padding: 7px 9px; }
 
 /* кнопка со спиннером */
@@ -387,6 +408,11 @@ input[type="range"] {
   transition: border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
 }
 .check:hover { border-color: var(--border-strong); }
+.check:has(input:checked) {
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+}
+.check:has(input:focus-visible) { border-color: var(--accent); }
 .check input {
   width: 16px;
   height: 16px;
@@ -398,7 +424,7 @@ input[type="range"] {
 /* ============================ карточки ============================ */
 
 .page {
-  max-width: 1180px;
+  max-width: var(--shell);
   margin: 0 auto;
   padding: var(--sp-6) var(--sp-5) var(--sp-7);
   display: grid;
@@ -406,6 +432,7 @@ input[type="range"] {
 }
 
 .card {
+  min-width: 0;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
@@ -460,6 +487,8 @@ input[type="range"] {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--sp-4);
 }
+.grid-2 > *,
+.grid-3 > * { min-width: 0; }
 .field { margin-bottom: var(--sp-4); }
 .field:last-child { margin-bottom: 0; }
 
@@ -732,10 +761,12 @@ ol.tips li { margin: 4px 0; }
 
 .layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 340px;
+  grid-template-columns: minmax(0, 1fr) 360px;
   gap: var(--sp-4);
   padding: var(--sp-4);
   height: calc(100vh - 56px);
+  max-width: var(--shell);
+  margin: 0 auto;
 }
 .chat { display: flex; flex-direction: column; min-height: 0; padding: 0; overflow: hidden; }
 .chat-head {
@@ -750,7 +781,7 @@ ol.tips li { margin: 4px 0; }
 .msg {
   padding: 7px 11px;
   border-radius: var(--r-sm);
-  font-size: 17px;
+  font-size: 18px;
   line-height: 1.45;
   word-break: break-word;
   border-left: 3px solid transparent;
@@ -761,7 +792,31 @@ ol.tips li { margin: 4px 0; }
 .msg.wait { border-left-color: var(--border-strong); }
 .msg.speaking { background: var(--accent-soft); border-left-color: var(--accent); }
 .msg.note { font-size: var(--fs-sm); color: var(--text-muted); font-style: italic; }
-.empty { color: var(--text-muted); text-align: center; margin-top: 18vh; font-size: var(--fs-md); }
+.empty { color: var(--text-muted); text-align: center; font-size: var(--fs-md); }
+
+/* пустое состояние чата */
+#chat .empty {
+  margin: 0;
+  min-height: 100%;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: var(--sp-1);
+  padding: var(--sp-6) var(--sp-4);
+}
+#chat .empty::before {
+  content: "\266A";
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 18px;
+  margin-bottom: var(--sp-2);
+}
 .side { display: flex; flex-direction: column; gap: var(--sp-3); overflow-y: auto; min-height: 0; }
 .now { font-size: var(--fs-md); min-height: 44px; }
 .now b { color: var(--accent-text); }
@@ -804,7 +859,7 @@ header {
   display: flex;
   align-items: center;
   gap: var(--sp-4);
-  padding: 0 var(--sp-5);
+  padding: 0 max(var(--sp-5), calc((100% - var(--shell)) / 2));
   height: 56px;
   min-height: 56px;
   flex-wrap: wrap;
@@ -844,14 +899,32 @@ body.embed .layout { grid-template-columns: minmax(0, 1fr); height: 100vh; paddi
 body.embed .chat { min-height: 0; }
 body.embed .side {
   flex-direction: row;
+  flex-wrap: wrap;
   align-items: stretch;
-  overflow-x: auto;
-  overflow-y: hidden;
+  overflow: visible;
   padding: var(--sp-2);
   gap: var(--sp-2);
 }
-body.embed .side .card { flex: none; min-width: 235px; }
+body.embed .side .card { flex: 1 1 230px; min-width: 0; }
 body.embed .side > button { align-self: flex-start; }
+
+/* заглушка звука во встроенном чате — компактная полоса, а не блокировка экрана */
+body.embed { position: relative; }
+body.embed #unlock {
+  position: absolute;
+  inset: 0 0 auto 0;
+  background: linear-gradient(to bottom, rgba(11, 12, 16, 0.96), rgba(11, 12, 16, 0.78));
+  backdrop-filter: blur(6px);
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+body.embed #unlock .btn { font-size: var(--fs-sm); padding: 8px 16px; }
+body.embed #unlock .muted { font-size: var(--fs-xs); line-height: 1.4; }
 body.embed .side .hint { display: none; }
 body.embed #unlock { padding: var(--sp-5); }
 
