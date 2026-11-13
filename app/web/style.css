@@ -127,6 +127,9 @@ code {
   gap: var(--sp-4);
   padding: 0 var(--sp-5);
   height: 56px;
+  min-height: 56px;
+  flex-wrap: wrap;
+  row-gap: var(--sp-2);
   background: rgba(18, 20, 25, 0.85);
   backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--border);
@@ -803,6 +806,9 @@ header {
   gap: var(--sp-4);
   padding: 0 var(--sp-5);
   height: 56px;
+  min-height: 56px;
+  flex-wrap: wrap;
+  row-gap: var(--sp-2);
   background: rgba(18, 20, 25, 0.85);
   backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--border);
@@ -849,6 +855,24 @@ body.embed .side > button { align-self: flex-start; }
 body.embed .side .hint { display: none; }
 body.embed #unlock { padding: var(--sp-5); }
 
+
+/* группы настроек в модальном окне */
+.settings-group {
+  padding-top: var(--sp-4);
+  margin-top: var(--sp-4);
+  border-top: 1px solid var(--border);
+}
+.settings-group:first-of-type { padding-top: 0; margin-top: 0; border-top: 0; }
+.group-title {
+  font-size: var(--fs-sm);
+  font-weight: 620;
+  color: var(--text);
+  margin-bottom: var(--sp-3);
+}
+dialog .check { margin-bottom: var(--sp-2); }
+dialog .row.field { margin-bottom: var(--sp-3); }
+.now-card { border-color: var(--accent-line); }
+
 /* ============================ адаптив ============================ */
 
 @media (max-width: 900px) {
@@ -863,8 +887,14 @@ body.embed #unlock { padding: var(--sp-5); }
   #chat { height: 60vh; }
   .page { padding: var(--sp-4) var(--sp-3) var(--sp-6); }
   .card { padding: var(--sp-4); }
-  .topbar { padding: 0 var(--sp-3); gap: var(--sp-2); }
+  .topbar {
+    height: auto;
+    padding: 10px var(--sp-3);
+    gap: var(--sp-2);
+  }
   .topbar .brand span { display: none; }
+  .topbar .pills { margin-left: 0; width: 100%; }
+  .topbar .pill { max-width: 100%; }
 }
 
 /* ============================ движение ============================ */

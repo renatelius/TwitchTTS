@@ -2,20 +2,20 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<title>Озвучка чата Twitch</title>
+<title>Чат — озвучка Twitch</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
 <div id="unlock">
-  <button class="primary" id="unlockBtn">▶ Включить звук</button>
+  <button class="btn primary" id="unlockBtn">▶ Включить звук</button>
   <div class="muted">Браузер не даёт играть звук, пока вы не нажмёте кнопку.<br>Эту вкладку нужно держать открытой — звук идёт из неё.</div>
 </div>
 
-<header>
-  <h1>Озвучка чата</h1>
-  <nav>
-    <a href="/poll">Опрос</a>
+<header class="topbar">
+  <div class="brand"><span class="logo">♪</span><span>Озвучка чата</span></div>
+  <nav class="segmented">
+    <a href="/poll" class="active">Опрос</a>
     <a href="/voices">Голоса</a>
   </nav>
   <div class="pills">
@@ -35,76 +35,130 @@
 
   <aside class="side">
     <div class="card">
-      <h2>Канал</h2>
+      <div class="card-head">
+        <div>
+          <h2>Канал</h2>
+          <span class="sub">Имя канала или ссылка на него. Логин и пароль не нужны.</span>
+        </div>
+      </div>
       <div class="row">
         <input type="text" id="channel" placeholder="имя канала или ссылка">
-        <button class="primary fit" id="connectBtn">Подключить</button>
+        <button class="btn primary fit" id="connectBtn">Подключить</button>
       </div>
       <div class="err" id="connErr"></div>
     </div>
 
-    <div class="card">
-      <h2>Сейчас читает</h2>
-      <div class="now" id="now"><span class="muted">тишина</span></div>
-      <div class="row">
-        <button id="pauseBtn">Пауза</button>
-        <button id="skipBtn">Пропустить</button>
-        <button id="clearBtn" class="danger">Очистить</button>
+    <div class="card now-card">
+      <div class="card-head">
+        <div>
+          <h2>Сейчас читает</h2>
+          <span class="sub">Очередь сообщений и управление озвучкой.</span>
+        </div>
       </div>
-      <div class="field" style="margin-top:12px">
-        <label>Громкость: <span id="volVal"></span></label>
+      <div class="now" id="now"><span class="muted">тишина</span></div>
+      <div class="row" style="margin-top:14px">
+        <button class="btn secondary fit" id="pauseBtn">Пауза</button>
+        <button class="btn secondary fit" id="skipBtn">Пропустить</button>
+        <button class="btn danger fit" id="clearBtn">Очистить</button>
+      </div>
+      <div class="field" style="margin-top:16px">
+        <label for="volume">Громкость: <span id="volVal"></span></label>
         <input type="range" id="volume" min="0" max="100">
       </div>
     </div>
 
     <div class="card">
-      <h2>Голос по умолчанию</h2>
+      <div class="card-head">
+        <div>
+          <h2>Голос по умолчанию</h2>
+          <span class="sub">Зритель меняет свой голос командой <b>!г имя</b>. Список голосов и новые голоса — на вкладке «Голоса».</span>
+        </div>
+      </div>
       <select id="defVoice"></select>
-      <div class="hint">Зритель меняет свой голос командой <b>!г имя</b>. Список голосов и добавление новых — на вкладке «Голоса».</div>
     </div>
 
     <div class="card">
-      <h2>Проверка</h2>
+      <div class="card-head">
+        <div>
+          <h2>Проверка звука</h2>
+          <span class="sub">Проговорить фразу выбранным голосом.</span>
+        </div>
+      </div>
       <div class="row">
         <input type="text" id="testText" value="Привет, чат! Hello everyone!">
-        <button class="fit" id="testBtn">Сказать</button>
+        <button class="btn fit" id="testBtn">Сказать</button>
       </div>
       <div class="err" id="testErr"></div>
     </div>
 
-    <button id="settingsBtn">⚙ Настройки</button>
+    <button class="btn secondary" id="settingsBtn">⚙ Настройки</button>
     <div class="hint">Чат для OBS (прозрачный фон): добавьте «Браузер» с адресом<br><code>http://127.0.0.1:8765/overlay</code></div>
   </aside>
 </div>
 
 <dialog id="dlg">
-  <h3>Настройки</h3>
-  <div class="row field">
-    <div><label>Язык сообщений</label>
-      <select id="s_language"><option value="auto">Русский + английский (авто)</option><option value="ru">Только русский</option><option value="en">Только английский</option></select></div>
-    <div><label>Кого озвучивать</label>
-      <select id="s_audience"><option value="all">Всех</option><option value="subs">Подписчиков, VIP и модераторов</option></select></div>
+  <h3>Настройки озвучки</h3>
+
+  <div class="settings-group">
+    <div class="group-title">Что читать</div>
+    <div class="row field">
+      <div>
+        <label for="s_language">Язык сообщений</label>
+        <select id="s_language"><option value="auto">Русский + английский (авто)</option><option value="ru">Только русский</option><option value="en">Только английский</option></select>
+      </div>
+      <div>
+        <label for="s_audience">Кого озвучивать</label>
+        <select id="s_audience"><option value="all">Всех</option><option value="subs">Подписчиков, VIP и модераторов</option></select>
+      </div>
+    </div>
+    <div class="row field">
+      <div>
+        <label for="s_max_len">Макс. длина сообщения, символов</label>
+        <input type="number" id="s_max_len" min="20" max="500">
+      </div>
+      <div>
+        <label for="s_max_queue">Макс. сообщений в очереди</label>
+        <input type="number" id="s_max_queue" min="1" max="100">
+      </div>
+    </div>
+    <div class="row field">
+      <div>
+        <label for="s_cooldown">Пауза между сообщениями одного зрителя, сек</label>
+        <input type="number" id="s_cooldown" min="0" max="600">
+      </div>
+      <div>
+        <label for="s_speed">Скорость речи: <span id="speedVal"></span></label>
+        <input type="range" id="s_speed" min="70" max="150">
+      </div>
+    </div>
+    <label class="check"><input type="checkbox" id="s_read_names"> Называть ник перед сообщением («ник говорит: …»)</label>
   </div>
-  <div class="row field">
-    <div><label>Макс. длина сообщения, символов</label><input type="number" id="s_max_len" min="20" max="500"></div>
-    <div><label>Макс. сообщений в очереди</label><input type="number" id="s_max_queue" min="1" max="100"></div>
+
+  <div class="settings-group">
+    <div class="group-title">Что пропускать</div>
+    <label class="check"><input type="checkbox" id="s_skip_commands"> Не читать команды (сообщения, начинающиеся с «!»)</label>
+    <label class="check"><input type="checkbox" id="s_skip_digits"> Не читать сообщения из одних цифр (голоса «1», «2», «3» в опросах)</label>
+    <label class="check"><input type="checkbox" id="s_skip_rewards"> Не читать сообщения наград за баллы канала</label>
+    <label class="check"><input type="checkbox" id="s_autoconnect"> Подключаться к каналу при запуске</label>
   </div>
-  <div class="row field">
-    <div><label>Пауза между сообщениями одного зрителя, сек</label><input type="number" id="s_cooldown" min="0" max="600"></div>
-    <div><label>Скорость речи: <span id="speedVal"></span></label><input type="range" id="s_speed" min="70" max="150"></div>
+
+  <div class="settings-group">
+    <div class="group-title">Голоса и фильтры</div>
+    <label class="check"><input type="checkbox" id="s_random_voice"> Зрителям без выбранного голоса давать случайный постоянный голос</label>
+    <div class="field" style="margin-top:12px">
+      <label for="s_ignore_users">Не озвучивать этих пользователей (через запятую)</label>
+      <input type="text" id="s_ignore_users">
+    </div>
+    <div class="field">
+      <label for="s_blocked_words">Запрещённые слова — сообщение с ними не читается (через запятую)</label>
+      <input type="text" id="s_blocked_words">
+    </div>
   </div>
-  <label class="check"><input type="checkbox" id="s_read_names"> Называть ник перед сообщением («ник говорит: …»)</label>
-  <label class="check"><input type="checkbox" id="s_random_voice"> Зрителям без выбранного голоса давать случайный постоянный голос</label>
-  <label class="check"><input type="checkbox" id="s_skip_commands"> Не читать команды (сообщения, начинающиеся с «!»)</label>
-  <label class="check"><input type="checkbox" id="s_skip_digits"> Не читать сообщения из одних цифр (голоса «1», «2», «3» в опросах)</label>
-  <label class="check"><input type="checkbox" id="s_skip_rewards"> Не читать сообщения наград за баллы канала</label>
-  <label class="check"><input type="checkbox" id="s_autoconnect"> Подключаться к каналу при запуске</label>
-  <div class="field"><label>Не озвучивать этих пользователей (через запятую)</label><input type="text" id="s_ignore_users"></div>
-  <div class="field"><label>Запрещённые слова — сообщение с ними не читается (через запятую)</label><input type="text" id="s_blocked_words"></div>
-  <div class="row" style="justify-content:flex-end">
+
+  <div class="row" style="justify-content:flex-end; margin-top:20px">
     <span></span>
-    <button class="fit" id="dlgCancel">Отмена</button>
-    <button class="fit primary" id="dlgSave">Сохранить</button>
+    <button class="btn fit" id="dlgCancel">Отмена</button>
+    <button class="btn primary fit" id="dlgSave">Сохранить</button>
   </div>
 </dialog>
 
@@ -134,7 +188,7 @@ function addMsg(ev, old) {
     div.dataset.id = ev.id;
     const nick = document.createElement('span');
     nick.className = 'nick'; nick.textContent = ev.user + ':';
-    nick.style.color = ev.color || '#b9a3ff';
+    nick.style.color = ev.color || '#c4b5fd';
     div.append(nick, document.createTextNode(ev.text));
     const tag = document.createElement('span');
     tag.className = 'tag'; tag.textContent = ev.tts ? (ev.voice || '') : (ev.note || '');

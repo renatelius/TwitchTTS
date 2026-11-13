@@ -7,13 +7,28 @@
   /* Прозрачная страница для источника «Браузер» в OBS. Звук здесь не играет — он идёт с главной страницы.
      Параметры в адресе: ?size=26 — размер шрифта, ?all=1 — показывать и неозвученные сообщения. */
   html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; }
-  body { font: 700 24px/1.35 "Segoe UI", system-ui, sans-serif; color: #fff; }
-  #chat { position: absolute; left: 0; right: 0; bottom: 0; padding: 12px; display: flex; flex-direction: column; gap: 6px; }
-  .msg { background: rgba(12, 12, 16, .62); border-radius: 10px; padding: 6px 12px; width: fit-content; max-width: 100%;
-         word-break: break-word; text-shadow: 0 1px 2px #000; border-left: 4px solid transparent; animation: in .25s ease-out; }
-  .msg.speaking { border-left-color: #9d6bff; background: rgba(60, 36, 110, .78); }
+  body {
+    font: 700 24px/1.35 "Inter", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+    color: #fff;
+  }
+  #chat {
+    position: absolute; left: 0; right: 0; bottom: 0;
+    padding: 12px; display: flex; flex-direction: column; gap: 6px;
+  }
+  .msg {
+    background: rgba(11, 12, 16, .62);
+    backdrop-filter: blur(6px);
+    border: 1px solid rgba(255, 255, 255, .07);
+    border-radius: 10px; padding: 6px 12px;
+    width: fit-content; max-width: 100%;
+    word-break: break-word; text-shadow: 0 1px 2px #000;
+    border-left: 4px solid transparent;
+    animation: in 320ms cubic-bezier(.2, .7, .3, 1);
+  }
+  .msg.speaking { border-left-color: #8b5cf6; background: rgba(60, 36, 110, .8); }
   .nick { margin-right: 8px; }
   @keyframes in { from { opacity: 0; transform: translateY(10px); } }
+  @media (prefers-reduced-motion: reduce) { .msg { animation: none; } }
 </style>
 </head>
 <body>
@@ -26,7 +41,7 @@ const chat = document.getElementById('chat');
 function add(ev) {
   if (!ev.tts && !showAll) return;
   const d = document.createElement('div'); d.className = 'msg'; d.dataset.id = ev.id;
-  const n = document.createElement('span'); n.className = 'nick'; n.textContent = ev.user + ':'; n.style.color = ev.color || '#b9a3ff';
+  const n = document.createElement('span'); n.className = 'nick'; n.textContent = ev.user + ':'; n.style.color = ev.color || '#c4b5fd';
   d.append(n, document.createTextNode(ev.text)); chat.append(d);
   while (chat.children.length > 12) chat.firstChild.remove();
 }
