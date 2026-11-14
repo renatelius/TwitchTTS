@@ -147,6 +147,12 @@
   </div>
 
   <div class="settings-group">
+    <div class="group-title">Эмоции</div>
+    <label class="check"><input type="checkbox" id="s_emotes"> «(смех)», «*вздыхает*», «[кашель]» звучат как эмоция, а не читаются словом</label>
+    <div class="hint" id="emotesHint">Записи для XTTS и RVC кладутся в папку sounds (создаётся при первом запуске). CosyVoice 3 смеётся и вздыхает сам.</div>
+  </div>
+
+  <div class="settings-group">
     <div class="group-title">Голоса и фильтры</div>
     <label class="check"><input type="checkbox" id="s_random_voice"> Зрителям без выбранного голоса давать случайный постоянный голос</label>
     <div class="field" style="margin-top:12px">
@@ -364,7 +370,18 @@ $('testBtn').onclick = async () => {
 };
 $('testText').onkeydown = e => { if (e.key === 'Enter') $('testBtn').click(); };
 
-const numeric = ['max_len', 'max_queue', 'cooldown'], bools = ['read_names', 'random_voice', 'skip_commands', 'skip_digits', 'skip_rewards', 'autoconnect'],
+async function loadEmotesInfo(){
+  try{
+    const r = await fetch('/api/emotes'); const j = await r.json();
+    if(!j || !j.ok) return;
+    let n = 0; for(const k in (j.emotes || {})) n += (j.emotes[k].files || 0);
+    $('emotesHint').textContent = n
+      ? 'Записей в папке sounds: ' + n + '. Свою запись можно положить в sounds\\<эмоция>\\.'
+      : 'Записей пока нет. Положите короткие файлы (wav, mp3, ogg; до 6 секунд) в sounds\\<эмоция>\\.';
+  }catch(e){}
+}
+
+const numeric = ['max_len', 'max_queue', 'cooldown'], bools = ['read_names', 'random_voice', 'skip_commands', 'skip_digits', 'skip_rewards', 'autoconnect', 'emotes'],
       lists = ['ignore_users', 'blocked_words'], selects = ['language', 'audience'];
 $('settingsBtn').onclick = () => {
   numeric.concat(selects).forEach(k => $('s_' + k).value = settings[k]);
@@ -372,6 +389,7 @@ $('settingsBtn').onclick = () => {
   lists.forEach(k => $('s_' + k).value = settings[k].join(', '));
   $('s_speed').value = Math.round(settings.speed * 100); $('speedVal').textContent = settings.speed.toFixed(2) + '×';
   $('dlg').showModal();
+  loadEmotesInfo();
 };
 $('s_speed').oninput = e => $('speedVal').textContent = (e.target.value / 100).toFixed(2) + '×';
 $('dlgCancel').onclick = () => $('dlg').close();

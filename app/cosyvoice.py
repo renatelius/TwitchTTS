@@ -191,11 +191,15 @@ class CosyVoiceBridge:
                 raise CosyVoiceError("Ошибка CosyVoice 3: %s" % ans.get("error"))
             return ans
 
-    def synthesize(self, text, prompt_wav, prompt_text, out_path, speed=1.0, timeout=300):
-        """Озвучивает текст голосом образца. Возвращает длительность результата."""
+    def synthesize(self, text, prompt_wav, prompt_text, out_path, speed=1.0, timeout=300, tags=False):
+        """Озвучивает текст голосом образца. Возвращает длительность результата.
+
+        tags=True - в тексте есть теги эмоций ([laughter], [sigh], ...): воркер следит,
+        чтобы нормализация текста их не испортила.
+        """
         ans = self._request({"cmd": "synthesize", "text": text, "prompt_wav": str(prompt_wav),
                              "prompt_text": prompt_text, "output": str(out_path),
-                             "speed": float(speed)}, timeout)
+                             "speed": float(speed), "tags": bool(tags)}, timeout)
         return float(ans.get("duration") or 0)
 
     def transcribe(self, wav_path, timeout=300):

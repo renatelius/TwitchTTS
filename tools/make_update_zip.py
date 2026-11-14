@@ -24,6 +24,7 @@ FILES = [
     "ОБНОВЛЕНИЕ - прочти меня.txt",
     "ОПРОС-ОЗВУЧКА.txt",
     "app/cosyvoice.py",
+    "app/emotes.py",
     "app/cosyvoice_worker.py",
     "app/download_model.py",
     "app/engine.py",
@@ -43,6 +44,8 @@ FILES = [
     "tools/audit_layout.py",
     "tools/audit_functional.py",
     "tools/audit_mute_volume.py",
+    "tools/audit_emotes.py",
+    "tools/test_emotes.py",
 ]
 
 MARKER = "Что нового в этом обновлении:"

@@ -17,6 +17,7 @@ release/
 data/*
 !data/settings.example.json
 voices/
+sounds/
 VoiceReader/
 записи/
 старые-голоса/

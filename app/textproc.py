@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Очистка сообщений чата и разбиение текста на русские/английские куски."""
+"""Очистка сообщений чата, поиск эмоций и разбиение текста на русские/английские куски."""
 import re
 
 URL_RE = re.compile(r"(https?://\S+|www\.\S+|\b[\w-]+\.(?:com|ru|tv|net|org|gg|io|me|su|рф)(?:/\S*)?)", re.I)
@@ -25,23 +25,54 @@ def strip_emotes(text, emote_ranges):
     return "".join(chars)
 
 
-def clean_text(text, emote_ranges=None, max_len=200):
-    text = strip_emotes(text, emote_ranges)
-    text = URL_RE.sub(" ", text)
+def _clean_plain(text):
     text = text.replace("@", " ").replace("_", " ")
     text = ALLOWED_RE.sub(" ", text)
     text = REPEAT_CHAR_RE.sub(lambda m: m.group(1) * 3, text)
     text = REPEAT_PUNCT_RE.sub(r"\1", text)
-    text = SPACE_RE.sub(" ", text).strip()
-    if len(text) > max_len:
-        cut = text[:max_len]
-        space = cut.rfind(" ")
-        if space > max_len * 0.6:
-            cut = cut[:space]
-        text = cut.strip()
-    if not (CYR_RE.search(text) or LAT_RE.search(text) or re.search(r"\d", text)):
-        return ""
-    return text
+    return SPACE_RE.sub(" ", text).strip()
+
+
+def _cut(text, max_len):
+    if len(text) <= max_len:
+        return text
+    cut = text[:max_len]
+    space = cut.rfind(" ")
+    if space > max_len * 0.6:
+        cut = cut[:space]
+    return cut.strip()
+
+
+def _speakable(text):
+    return bool(CYR_RE.search(text) or LAT_RE.search(text) or re.search(r"\d", text))
+
+
+def clean_text(text, emote_ranges=None, max_len=200, emotes=False):
+    """Чистит сообщение.
+
+    При emotes=True ремарки вроде (смех) или *вздыхает* заменяются метками
+    {laugh}, {sigh} - их потом озвучивает emotes.py.
+    """
+    text = strip_emotes(text, emote_ranges)
+    text = URL_RE.sub(" ", text)
+    if not emotes:
+        text = _cut(_clean_plain(text), max_len)
+        return text if _speakable(text) else ""
+    from emotes import mark, split_emotes
+    out, left, spoken = [], max_len, False
+    for kind, val in split_emotes(text):
+        if kind == "emote":
+            out.append(mark(val))
+            spoken = True
+            continue
+        if left <= 0:
+            continue
+        piece = _cut(_clean_plain(val), left)
+        if piece:
+            left -= len(piece) + 1
+            out.append(piece)
+            spoken = spoken or _speakable(piece)
+    return " ".join(out) if spoken else ""
 
 
 def _word_lang(word):
@@ -76,8 +107,7 @@ def _split_long(text, limit):
     return out
 
 
-def segments(text, mode="auto"):
-    """Возвращает список (язык, текст). mode: auto | ru | en."""
+def _text_segments(text, mode="auto"):
     text = text.strip()
     if not text:
         return []
@@ -113,6 +143,24 @@ def segments(text, mode="auto"):
     for lang, part in runs:
         for chunk in _split_long(part, CHUNK_LIMIT.get(lang, 160)):
             out.append((lang, chunk))
+    return out
+
+
+MARK_SPLIT_RE = re.compile(r"\{([a-z]+)\}")
+
+
+def segments(text, mode="auto"):
+    """Возвращает список (язык, текст). mode: auto | ru | en.
+
+    Метки эмоций {laugh} становятся отдельными кусками ("emote", "laugh").
+    """
+    out = []
+    parts = MARK_SPLIT_RE.split(text)
+    for n, part in enumerate(parts):
+        if n % 2:
+            out.append(("emote", part))
+        else:
+            out.extend(_text_segments(part, mode))
     return out
 
 

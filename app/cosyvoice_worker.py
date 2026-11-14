@@ -7,6 +7,7 @@
 """
 import json
 import os
+import re
 import sys
 
 # CosyVoice 3 требует маркер <|endofprompt|> в тексте образца
@@ -18,6 +19,29 @@ TAG = "@@CV@@"
 def send(obj):
     sys.stdout.write(TAG + json.dumps(obj, ensure_ascii=False) + "\n")
     sys.stdout.flush()
+
+
+# Теги эмоций CosyVoice 3 (cosyvoice/tokenizer/tokenizer.py, CosyVoice3Tokenizer)
+EMOTE_TAG_RE = re.compile(r"\[(?:laughter|sigh|breath|quick_breath|cough|mn|clucking|lipsmack|hissing)\]")
+
+
+def tags_survive(model, text):
+    """Проверяет, что нормализация текста не ломает теги эмоций.
+
+    Нормализатор (wetext) может выкинуть или «прочитать» квадратные скобки - тогда
+    вместо смеха прозвучит слово. В этом случае нормализацию для фразы отключаем:
+    CosyVoice 3 читает числа и символы и без неё.
+    """
+    tags = EMOTE_TAG_RE.findall(text)
+    if not tags:
+        return True
+    try:
+        norm = model.frontend.text_normalize(text, split=False, text_frontend=True)
+    except Exception:
+        return False
+    if not isinstance(norm, str):
+        return False
+    return EMOTE_TAG_RE.findall(norm) == tags
 
 
 def load_audio(path, target_sr=16000):
@@ -94,9 +118,12 @@ def main():
                 if not prompt_text:
                     raise ValueError("нет текста образца")
                 m = get_model()
+                extra = {}
+                if req.get("tags") and not tags_survive(m, text):
+                    extra["text_frontend"] = False
                 chunks = []
                 for res in m.inference_zero_shot(text, PREFIX + prompt_text, prompt_wav,
-                                                 stream=False, speed=speed):
+                                                 stream=False, speed=speed, **extra):
                     chunks.append(res["tts_speech"])
                 speech = torch.cat(chunks, dim=1)
                 data = speech.squeeze(0).cpu().numpy().astype("float32")

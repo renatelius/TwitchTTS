@@ -75,7 +75,7 @@ with sync_playwright() as p:
         pass
     pg.click("#settingsBtn"); pg.wait_for_timeout(500)
     groups = pg.eval_on_selector_all("#dlg .settings-group .group-title", "els => els.map(e => e.textContent)")
-    check("чат/диалог настроек", pg.eval_on_selector("#dlg", "e => e.open") and len(groups) == 3, str(groups))
+    check("чат/диалог настроек", pg.eval_on_selector("#dlg", "e => e.open") and len(groups) == 4 and "Эмоции" in groups, str(groups))
     pg.click("#dlgCancel"); pg.wait_for_timeout(300)
     pg.click("#pauseBtn"); pg.wait_for_timeout(800)
     t = pg.inner_text("#pauseBtn")

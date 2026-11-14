@@ -99,7 +99,10 @@ class BaseEngine:
         raise NotImplementedError
 
     def synthesize(self, segs, latents, out_path, speed=1.0, pitch=0.0):
-        """segs: [(язык, текст)]. Пишет wav, возвращает длительность в секундах."""
+        """segs: [(язык, текст) | ("audio", готовая запись с частотой OUT_SR)].
+
+        Куски "audio" (записи эмоций: смех, вздох) вклеиваются между фразами как есть.
+        Пишет wav, возвращает длительность в секундах."""
         raise NotImplementedError
 
 
@@ -222,16 +225,21 @@ class XttsEngine(BaseEngine):
         gap = np.zeros(int(OUT_SR * 0.12), dtype=np.float32)
         with self.lock, torch.inference_mode():
             for lang, text in segs:
+                if lang == "audio":
+                    # запись эмоции: тон не сдвигаем, это не синтез
+                    parts.append(np.asarray(text, dtype=np.float32).reshape(-1))
+                    parts.append(gap)
+                    continue
                 out = self.model.inference(
                     text, lang, latents["gpt_cond_latent"], latents["speaker_embedding"],
                     temperature=0.7, speed=float(speed), enable_text_splitting=True)
                 wav = out["wav"]
                 if hasattr(wav, "detach"):
                     wav = wav.detach().cpu().numpy()
-                parts.append(np.asarray(wav, dtype=np.float32).reshape(-1))
+                wav = np.asarray(wav, dtype=np.float32).reshape(-1)
+                parts.append(shift_pitch(wav, OUT_SR, float(pitch or 0)))
                 parts.append(gap)
         audio = np.concatenate(parts[:-1]) if parts else np.zeros(1, dtype=np.float32)
-        audio = shift_pitch(audio, OUT_SR, float(pitch or 0))
         write_wav(out_path, audio, OUT_SR)
         return len(audio) / OUT_SR
 
@@ -261,10 +269,15 @@ class MockEngine(BaseEngine):
             return {"freq": float(f.read())}
 
     def synthesize(self, segs, latents, out_path, speed=1.0, pitch=0.0):
-        n_chars = sum(len(t) for _, t in segs)
-        dur = max(0.4, min(n_chars * 0.06, 12.0)) / max(speed, 0.1)
-        t = np.arange(int(OUT_SR * dur)) / OUT_SR
-        audio = 0.2 * np.sin(2 * math.pi * latents["freq"] * t) * (0.6 + 0.4 * np.sin(2 * math.pi * 4 * t))
-        audio = shift_pitch(audio, OUT_SR, float(pitch or 0))
+        parts = []
+        for lang, text in segs:
+            if lang == "audio":
+                parts.append(np.asarray(text, dtype=np.float32).reshape(-1))
+                continue
+            dur = max(0.4, min(len(text) * 0.06, 12.0)) / max(speed, 0.1)
+            t = np.arange(int(OUT_SR * dur)) / OUT_SR
+            beep = 0.2 * np.sin(2 * math.pi * latents["freq"] * t) * (0.6 + 0.4 * np.sin(2 * math.pi * 4 * t))
+            parts.append(shift_pitch(beep, OUT_SR, float(pitch or 0)))
+        audio = np.concatenate(parts) if parts else np.zeros(int(OUT_SR * 0.4), dtype=np.float32)
         write_wav(out_path, audio, OUT_SR)
-        return dur
+        return len(audio) / OUT_SR

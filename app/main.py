@@ -32,12 +32,13 @@ from starlette.responses import FileResponse, JSONResponse, RedirectResponse, St
 from starlette.routing import Mount, Route  # noqa: E402
 from starlette.staticfiles import StaticFiles  # noqa: E402
 
-from engine import MockEngine, XttsEngine  # noqa: E402
+from engine import OUT_SR, REF_SR, MockEngine, XttsEngine  # noqa: E402
 import rvc as rvclib  # noqa: E402
 import cosyvoice as cvlib  # noqa: E402
 from textproc import clean_text, segments  # noqa: E402
+import emotes as emotelib  # noqa: E402
 from twitch import TwitchChat, normalize_channel  # noqa: E402
-from voices import VoiceError, VoiceStore, measure_f0  # noqa: E402
+from voices import VoiceError, VoiceStore, decode as decode_audio, measure_f0  # noqa: E402
 from rvc_train import RvcTrainer, TrainError  # noqa: E402
 
 HOST = os.environ.get("TTS_HOST", "127.0.0.1")
@@ -73,6 +74,7 @@ DEFAULTS = {
     "skip_commands": True,
     "skip_digits": True,       # не читать сообщения из одних цифр (голоса в опросах)
     "skip_rewards": True,      # не читать сообщения наград за баллы канала
+    "emotes": True,            # (смех), *вздыхает* - звучат как эмоция, а не читаются словом
     "ignore_users": ["nightbot", "streamelements", "moobot", "fossabot", "streamlabs", "wizebot"],
     "blocked_words": [],
     "disabled_voices": [],
@@ -120,6 +122,10 @@ class App:
         self.cosyvoice = cvlib.CosyVoiceBridge(APP_DIR / "cosyvoice_worker.py",
                                                DATA / "cosyvoice_log.txt",
                                                self.push_status_threadsafe)
+        # записи эмоций для движков без собственных тегов (XTTS, RVC): sounds/<эмоция>/
+        self.emotes = emotelib.EmoteSounds(ROOT / "sounds", OUT_SR,
+                                           lambda p: (decode_audio(p), REF_SR))
+        self.emotes.prepare_folders()
         self._train_done = False
         self.progress = ""
         self.executor = ThreadPoolExecutor(max_workers=1)   # модель одна, работаем по очереди
@@ -297,7 +303,7 @@ class App:
             self.broadcast(event)
             return
 
-        cleaned = clean_text(text, m["emotes"], int(s["max_len"]))
+        cleaned = self.clean(text, m["emotes"])
         if not cleaned:
             event["note"] = "нечего читать"
             self.broadcast(event)
@@ -318,6 +324,11 @@ class App:
         speak = ("%s говорит: %s" % (m["name"].replace("_", " "), cleaned)) if s["read_names"] else cleaned
         self.enqueue(event["id"], m["name"], speak, voice)
 
+    def clean(self, text, emote_ranges=None, max_len=None):
+        """Чистка текста с учётом настройки «эмоции»."""
+        return clean_text(text, emote_ranges, int(max_len or self.settings["max_len"]),
+                          emotes=bool(self.settings["emotes"]))
+
     def enqueue(self, msg_id, user, speak_text, voice):
         self.pending.append({"id": msg_id, "user": user, "text": speak_text, "voice_id": voice["id"],
                              "voice_name": voice["name"],
@@ -337,9 +348,18 @@ class App:
             # CosyVoice 3 в режиме in-context: образец голоса + его точный текст
             prompt, prompt_text = self.voices.cosyvoice_prompt(voice["id"])
             self.ensure_cosyvoice()
-            dur = self.cosyvoice.synthesize(" ".join(t for _, t in segs), prompt, prompt_text,
-                                            out, self.settings["speed"])
-        elif voice and voice["kind"] == "rvc":
+            # эмоции CosyVoice 3 играет сам, тегами в тексте: [laughter], [sigh]...
+            text, tagged = emotelib.cosy_text(segs, self.settings["language"])
+            if not text:
+                raise ValueError("нечего читать")
+            dur = self.cosyvoice.synthesize(text, prompt, prompt_text,
+                                            out, self.settings["speed"], tags=tagged)
+            return out, dur
+        # XTTS и RVC тегов эмоций не знают: вклеиваем записи из папки sounds/
+        segs = self.emotes.resolve(segs, voice, self.settings["language"])
+        if not segs:
+            raise ValueError("для этой эмоции нет ни записи, ни замены")
+        if voice and voice["kind"] == "rvc":
             # сначала читаем текст обычным голосом, потом RVC превращает его в голос персонажа
             pre = CACHE / ("pre_%s.wav" % uuid.uuid4().hex)
             try:
@@ -573,7 +593,7 @@ async def api_say(request):
     """Проверочная фраза: идёт через общую очередь, как сообщение из чата."""
     a = app_state
     data = await body(request)
-    text = clean_text(str(data.get("text", "")), None, int(a.settings["max_len"]))
+    text = a.clean(str(data.get("text", "")))
     if not text:
         return fail("Введите текст")
     voice = a.voices.get(str(data.get("voice", ""))) or a.default_voice()
@@ -593,7 +613,7 @@ async def api_preview(request):
     a = app_state
     data = await body(request)
     voice = a.voices.get(str(data.get("voice", "")))
-    text = clean_text(str(data.get("text", "")), None, 200) or "Привет, чат! Это проверка голоса."
+    text = a.clean(str(data.get("text", "")), None, 200) or "Привет, чат! Это проверка голоса."
     if not voice:
         return fail("Голос не найден", 404)
     if a.engine.status != "ready":
@@ -611,7 +631,7 @@ async def api_announce(request):
     """Синтез одной фразы вне очереди - для внешних страниц (например, голосования)."""
     a = app_state
     data = await body(request)
-    text = clean_text(str(data.get("text", "")), None, int(a.settings["max_len"]))
+    text = a.clean(str(data.get("text", "")))
     if not text:
         return fail("Пустой текст")
     voice = a.voices.get(str(data.get("voice", ""))) or a.default_voice()
@@ -626,6 +646,12 @@ async def api_announce(request):
         log.exception("ошибка озвучки")
         return fail("Ошибка озвучки: %s" % e, 500)
     return ok(url="/audio/" + path.name, duration=dur, voice=voice["name"])
+
+
+async def api_emotes(request):
+    """Список эмоций и сколько записей лежит в sounds/ - для подсказки в настройках."""
+    a = app_state
+    return ok(enabled=bool(a.settings["emotes"]), folder=str(a.emotes.root), emotes=a.emotes.summary())
 
 
 async def api_voices(request):
@@ -981,6 +1007,7 @@ routes = [
     Route("/api/say", api_say, methods=["POST"]),
     Route("/api/preview", api_preview, methods=["POST"]),
     Route("/api/announce", api_announce, methods=["POST"]),
+    Route("/api/emotes", api_emotes, methods=["GET"]),
     Route("/api/voices", api_voices, methods=["GET"]),
     Route("/api/voices", api_voice_create, methods=["POST"]),
     Route("/api/voices/toggle", api_voice_toggle, methods=["POST"]),
