@@ -19,6 +19,8 @@
     <a href="/poll" class="active">Опрос</a>
     <a href="/voices">Голоса</a>
   </nav>
+  <button class="btn small mute-toggle" id="muteBtn" aria-pressed="false"
+          title="Выключить озвучку чата">🔊 Озвучка</button>
   <div class="pills">
     <span class="pill" id="pillEngine">Модель: загрузка…</span>
     <span class="pill" id="pillTwitch">Twitch: не подключён</span>
@@ -64,7 +66,7 @@
       </div>
       <div class="field" style="margin-top:16px">
         <label for="volume">Громкость: <span id="volVal"></span></label>
-        <input type="range" id="volume" min="0" max="100">
+        <input type="range" id="volume" min="0" max="200">
       </div>
     </div>
 
@@ -172,6 +174,38 @@ const chat = $('chat');
 const player = new Audio();
 let settings = {}, st = {}, voices = [];
 
+// Громкость: общая (0-200 %) и своя у голоса (0-200 %).
+// У <audio> громкость ограничена 100 %, поэтому усиление делает Web Audio.
+let actx = null, gainNode = null, playerSrc = false;
+function audioGraph() {
+  if (!actx) {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    actx = new AC();
+    gainNode = actx.createGain();
+    gainNode.connect(actx.destination);
+  }
+  if (actx.state === 'suspended') actx.resume();
+  return gainNode;
+}
+function connectPlayer() {
+  const g = audioGraph();
+  if (!g || playerSrc) return g;
+  try { actx.createMediaElementSource(player).connect(g); playerSrc = true; } catch (e) { /* уже подключён */ }
+  return g;
+}
+function applyVolume(voiceFactor) {
+  const g = connectPlayer();
+  const v = Math.max(0, Number(settings.volume) || 0) *
+            Math.max(0, voiceFactor == null ? 1 : voiceFactor);
+  if (g) { g.gain.value = v; player.volume = 1; }
+  else player.volume = Math.min(1, v);
+}
+function voiceFactor(id) {
+  const v = (voices || []).find(x => x.id === id);
+  return v && v.volume != null ? Math.max(0, v.volume) / 100 : 1;
+}
+
 async function api(path, data, method) {
   const r = await fetch(path, {method: method || (data ? 'POST' : 'GET'),
     headers: data ? {'Content-Type': 'application/json'} : {}, body: data ? JSON.stringify(data) : undefined});
@@ -205,6 +239,25 @@ function mark(id, cls) {
   if (el) { el.classList.remove('wait', 'speaking'); if (cls) el.classList.add(cls); }
 }
 
+// ---------- мьют озвучки в шапке ----------
+const muteBtn = $('muteBtn');
+function renderMute(muted) {
+  if (!muteBtn) return;
+  muteBtn.classList.toggle('muted', !!muted);
+  muteBtn.setAttribute('aria-pressed', muted ? 'true' : 'false');
+  muteBtn.textContent = muted ? '🔇 Озвучка выкл' : '🔊 Озвучка';
+  muteBtn.title = muted ? 'Озвучка чата выключена - нажмите, чтобы включить' : 'Выключить озвучку чата';
+}
+muteBtn.onclick = async () => {
+  const next = !(settings && settings.muted);
+  muteBtn.disabled = true;
+  try {
+    const r = await api('/api/settings', {muted: next});
+    if (r && r.ok) { settings = r.settings; renderSettings(); }
+  } catch (e) { /* нет связи с программой */ }
+  muteBtn.disabled = false;
+};
+
 // ---------- статус ----------
 function renderStatus() {
   if (!st.engine) return;
@@ -233,7 +286,8 @@ function renderStatus() {
 function renderSettings() {
   $('volume').value = Math.round(settings.volume * 100);
   $('volVal').textContent = Math.round(settings.volume * 100) + '%';
-  player.volume = settings.volume;
+  player.volume = Math.min(1, settings.volume);
+  renderMute(settings.muted);
   if (document.activeElement !== $('channel') && !$('channel').value) $('channel').value = settings.channel || '';
   renderVoices();
 }
@@ -269,12 +323,16 @@ function connectEvents() {
     else if (ev.type === 'status') { st = ev; renderStatus(); }
     else if (ev.type === 'speak') {
       mark(ev.id, 'speaking');
-      player.src = ev.url; player.volume = settings.volume;
+      player.src = ev.url;
+      applyVolume(ev.vol != null ? ev.vol : voiceFactor(ev.voice_id));
       player.play().catch(() => { $('unlock').style.display = 'flex'; });
     } else if (ev.type === 'stop') { player.pause(); }
     else if (ev.type === 'done') mark(ev.id, '');
     else if (ev.type === 'tts_error') { mark(ev.id, ''); addMsg({type: 'note', text: 'Ошибка озвучки: ' + ev.error}); }
-    else if (ev.type === 'settings') { settings = ev.settings; renderSettings(); }
+    else if (ev.type === 'settings') {
+      settings = ev.settings; renderSettings();
+      if (settings.muted) player.pause();
+    }
     else if (ev.type === 'voices') loadAll();
   };
 }
@@ -283,6 +341,7 @@ function connectEvents() {
 $('unlockBtn').onclick = () => {
   player.src = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA=';
   player.play().catch(() => {});
+  connectPlayer();
   $('unlock').style.display = 'none';
 };
 $('connectBtn').onclick = async () => {

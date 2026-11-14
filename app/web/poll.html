@@ -219,6 +219,36 @@ code {
 
 .topbar .pills { margin-left: auto; }
 
+/* переключатель озвучки в шапке */
+.mute-toggle { white-space: nowrap; }
+.mute-toggle.muted {
+  background: var(--bad-soft);
+  border-color: rgba(248, 113, 113, 0.35);
+  color: var(--bad);
+}
+.mute-toggle.muted:hover {
+  background: rgba(248, 113, 113, 0.2);
+  border-color: var(--bad);
+}
+
+/* строка громкости голоса */
+.vrow {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--border);
+}
+.vrow input[type="range"] { flex: 1; min-width: 120px; max-width: 420px; }
+.vrow .val {
+  min-width: 54px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+}
+
 /* ============================ статусы ============================ */
 
 .pill {
@@ -1434,6 +1464,8 @@ html[data-mode="file"] .chatgrid { grid-template-columns: minmax(0, 1fr); }
     <a href="/poll" class="active">Опрос</a>
     <a href="/voices">Голоса</a>
   </nav>
+  <button class="btn small mute-toggle" id="muteBtn" aria-pressed="false"
+          title="Выключить озвучку чата">🔊 Озвучка</button>
   <div class="pills">
     <span class="pill" id="pillEngine">Модель: загрузка…</span>
     <span class="pill" id="pillTts">Опрос: озвучка выключена</span>
@@ -1619,7 +1651,9 @@ html[data-mode="file"] .chatgrid { grid-template-columns: minmax(0, 1fr); }
       <select id="ttsVoice" aria-label="Голос объявлений"></select>
     </div>
     <div class="tts-row">
-      <input type="number" id="ttsVol" min="0" max="100" value="90" aria-label="Громкость, проценты">
+      <span class="label" style="margin:0; flex:none">Громкость</span>
+      <input type="range" id="ttsVol" min="0" max="200" step="5" value="90" aria-label="Громкость объявлений, проценты">
+      <span class="tone-label" id="ttsVolVal" style="min-width:52px; text-align:right">90%</span>
       <button class="btn secondary" id="ttsTest">Проверить звук</button>
     </div>
     <div class="tts-row tts-url-row">
@@ -1690,7 +1724,7 @@ html[data-mode="file"] .chatgrid { grid-template-columns: minmax(0, 1fr); }
   var TTS_KEY = "twitchPollTTS";
   var ORD = ["первый", "второй", "третий"];
   var countdownSaid = false;
-  var TTS = { ok: false, engine: "", device: "", voices: [], queue: [], playing: false, lastVote: 0, fallback: false };
+  var TTS = { ok: false, engine: "", device: "", voices: [], queue: [], playing: false, lastVote: 0, fallback: false, chatMuted: false };
   function ttsBase() {
     // внутри приложения работаем только с его собственным сервером
     if (location.protocol !== "file:") return location.origin;
@@ -1710,6 +1744,53 @@ html[data-mode="file"] .chatgrid { grid-template-columns: minmax(0, 1fr); }
       }));
     } catch (e) {}
   }
+  // Громкость объявлений 0-200 %: у <audio> потолок 100 %, усиление делает Web Audio.
+  var ttsCtx = null, ttsGain = null;
+  function ttsGraph() {
+    if (!ttsCtx) {
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return null;
+      ttsCtx = new AC();
+      ttsGain = ttsCtx.createGain();
+      ttsGain.connect(ttsCtx.destination);
+    }
+    if (ttsCtx.state === 'suspended') ttsCtx.resume();
+    return ttsGain;
+  }
+  function ttsVoiceFactor() {
+    var id = $("ttsVoice").value;
+    for (var i = 0; i < TTS.voices.length; i++) {
+      if (TTS.voices[i].id === id) {
+        var v = TTS.voices[i].volume;
+        return (v == null ? 100 : Math.max(0, v)) / 100;
+      }
+    }
+    return 1;
+  }
+  function ttsVolLabel() {
+    var el = $("ttsVolVal");
+    if (el) el.textContent = (parseInt($("ttsVol").value, 10) || 0) + "%";
+  }
+
+  // ---------- мьют озвучки чата в шапке ----------
+  var muteBtn = $("muteBtn");
+  function renderMute(muted) {
+    if (!muteBtn) return;
+    muteBtn.classList.toggle("muted", !!muted);
+    muteBtn.setAttribute("aria-pressed", muted ? "true" : "false");
+    muteBtn.textContent = muted ? "🔇 Озвучка выкл" : "🔊 Озвучка";
+    muteBtn.title = muted ? "Озвучка чата выключена - нажмите, чтобы включить" : "Выключить озвучку чата";
+  }
+  if (muteBtn) {
+    muteBtn.addEventListener("click", function () {
+      var next = !TTS.chatMuted;
+      muteBtn.disabled = true;
+      ttsApi("/api/settings", { muted: next }).then(function (r) {
+        if (r && r.ok) { TTS.chatMuted = !!r.settings.muted; renderMute(TTS.chatMuted); }
+      }).catch(function () {}).then(function () { muteBtn.disabled = false; });
+    });
+  }
+
   function ttsStatus(kind, text) {
     var el = $("ttsStatus");
     el.className = "status " + kind;
@@ -1737,6 +1818,8 @@ html[data-mode="file"] .chatgrid { grid-template-columns: minmax(0, 1fr); }
       TTS.engine = en.status || "";
       TTS.device = en.device || "";
       TTS.voices = (r.voices || []).filter(function (v) { return v.enabled !== false; });
+      TTS.chatMuted = !!(r.settings || {}).muted;
+      renderMute(TTS.chatMuted);
       ttsRenderVoices(r.settings || {});
       if (TTS.engine === "ready") ttsStatus("ok", "Готово · " + (TTS.device || "модель загружена"));
       else if (TTS.engine === "loading") ttsStatus("wait", "Модель озвучки загружается…");
@@ -1800,7 +1883,18 @@ html[data-mode="file"] .chatgrid { grid-template-columns: minmax(0, 1fr); }
       .then(function (r) {
         if (!r || !r.ok) throw new Error((r && r.error) || "ошибка сервера");
         var a = new Audio(ttsBase() + r.url);
-        a.volume = Math.max(0, Math.min(1, (parseInt($("ttsVol").value, 10) || 0) / 100));
+        var level = ((parseInt($("ttsVol").value, 10) || 0) / 100) * ttsVoiceFactor();
+        var g = ttsGraph();
+        if (g) {
+          try {
+            ttsCtx.createMediaElementSource(a).connect(ttsGain);
+            g.gain.value = Math.max(0, level);
+            a.volume = 1;
+
+          } catch (e) { a.volume = Math.min(1, Math.max(0, level)); }
+        } else {
+          a.volume = Math.min(1, Math.max(0, level));
+        }
         return new Promise(function (resolve, reject) {
           a.onended = function () { resolve(); };
           a.onerror = function () { reject(new Error("браузер не смог проиграть звук")); };
@@ -1872,6 +1966,7 @@ html[data-mode="file"] .chatgrid { grid-template-columns: minmax(0, 1fr); }
     var c = ttsCfg();
     $("ttsUrl").value = location.protocol === "file:" ? (c.url || "http://127.0.0.1:8765") : location.origin;
     $("ttsVol").value = (c.vol === undefined || c.vol === null || c.vol === "") ? 90 : c.vol;
+    ttsVolLabel();
     $("ttsOn").checked = !!c.on;
     $("ttsStart").checked = c.start === undefined ? true : !!c.start;
     $("ttsVote").checked = !!c.vote;
@@ -1885,6 +1980,7 @@ html[data-mode="file"] .chatgrid { grid-template-columns: minmax(0, 1fr); }
       });
       el.addEventListener("change", function () {
         ttsSave();
+        if (id === "ttsVol") ttsVolLabel();
         if (id === "ttsUrl" || id === "ttsVoice" || id === "ttsOn") ttsRefresh();
       });
     });
@@ -1897,6 +1993,7 @@ html[data-mode="file"] .chatgrid { grid-template-columns: minmax(0, 1fr); }
       var a = new Audio("data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA=");
       a.volume = 0.01;
       a.play().catch(function () {});
+      ttsGraph();
     }, { once: true });
     ttsRefresh();
     ttsSummary();

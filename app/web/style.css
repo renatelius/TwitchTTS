@@ -204,6 +204,36 @@ code {
 
 .topbar .pills { margin-left: auto; }
 
+/* переключатель озвучки в шапке */
+.mute-toggle { white-space: nowrap; }
+.mute-toggle.muted {
+  background: var(--bad-soft);
+  border-color: rgba(248, 113, 113, 0.35);
+  color: var(--bad);
+}
+.mute-toggle.muted:hover {
+  background: rgba(248, 113, 113, 0.2);
+  border-color: var(--bad);
+}
+
+/* строка громкости голоса */
+.vrow {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--border);
+}
+.vrow input[type="range"] { flex: 1; min-width: 120px; max-width: 420px; }
+.vrow .val {
+  min-width: 54px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+}
+
 /* ============================ статусы ============================ */
 
 .pill {

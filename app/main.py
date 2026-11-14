@@ -48,12 +48,21 @@ TMP = DATA / "tmp"
 WEB = APP_DIR / "web"
 MAX_UPLOAD = 500 * 1024 * 1024
 
+def _vol_factor(value):
+    """Громкость голоса (проценты) -> коэффициент 0.0-2.0."""
+    try:
+        return max(0.0, min(float(value), 200.0)) / 100.0
+    except (TypeError, ValueError):
+        return 1.0
+
+
 DEFAULTS = {
     "channel": "",
     "autoconnect": True,
     "default_voice": "",
     "random_voice": False,     # зрителям без выбранного голоса давать постоянный случайный
-    "volume": 0.9,
+    "volume": 0.9,           # 0.0 - 2.0 (0-200 %)
+    "muted": False,          # мьют озвучки чата: реплики не читаются
     "speed": 1.0,
     "language": "auto",        # auto | ru | en
     "max_len": 200,
@@ -266,7 +275,9 @@ class App:
             return
 
         note = ""
-        if m["login"] in [u.lower() for u in s["ignore_users"]]:
+        if s.get("muted"):
+            note = "озвучка выключена"
+        elif m["login"] in [u.lower() for u in s["ignore_users"]]:
             note = "бот"
         elif text.startswith("!") and s["skip_commands"]:
             note = "команда"
@@ -309,7 +320,9 @@ class App:
 
     def enqueue(self, msg_id, user, speak_text, voice):
         self.pending.append({"id": msg_id, "user": user, "text": speak_text, "voice_id": voice["id"],
-                             "voice_name": voice["name"], "gen": self.gen})
+                             "voice_name": voice["name"],
+                             "vol": _vol_factor(voice.get("volume")),
+                             "gen": self.gen})
         self.wake.set()
         self.push_status()
 
@@ -360,7 +373,9 @@ class App:
                 path, dur = await self.loop.run_in_executor(self.executor, self._synth, job)
                 if job["gen"] == self.gen and not self.skip_event.is_set():
                     self.broadcast({"type": "speak", "id": job["id"], "url": "/audio/" + path.name,
-                                    "user": job["user"], "voice": job["voice_name"], "duration": dur})
+                                    "user": job["user"], "voice": job["voice_name"],
+                                    "voice_id": job.get("voice_id", ""),
+                                    "vol": job.get("vol", 1.0), "duration": dur})
                     try:
                         await asyncio.wait_for(self.skip_event.wait(), timeout=dur + 0.35)
                         self.broadcast({"type": "stop"})
@@ -488,6 +503,7 @@ async def api_state(request):
 async def api_settings(request):
     a = app_state
     data = await body(request)
+    was_muted = bool(a.settings.get("muted"))
     for key, default in DEFAULTS.items():
         if key not in data or key in ("channel", "disabled_voices", "applio_path", "cosyvoice_path"):
             continue
@@ -507,10 +523,13 @@ async def api_settings(request):
             continue
         a.settings[key] = val
     a.settings["speed"] = max(0.7, min(a.settings["speed"], 1.5))
-    a.settings["volume"] = max(0.0, min(a.settings["volume"], 1.0))
+    a.settings["volume"] = max(0.0, min(a.settings["volume"], 2.0))
     a.settings["max_len"] = max(20, min(a.settings["max_len"], 500))
     a.settings["max_queue"] = max(1, min(a.settings["max_queue"], 100))
     a.save_settings()
+    if a.settings.get("muted") and not was_muted:
+        # мьют: замолкаем сразу - текущая реплика и вся очередь
+        a.clear()
     a.broadcast({"type": "settings", "settings": a.settings})
     return ok(settings=a.settings)
 
@@ -667,6 +686,21 @@ async def api_voice_pitch(request):
     except Exception as e:
         log.exception("ошибка сдвига тона")
         return fail("Не удалось изменить тон: %s" % e, 500)
+    a.broadcast({"type": "voices"})
+    return ok(voice=voice)
+
+
+async def api_voice_volume(request):
+    """Своя громкость голоса (проценты, 0-200)."""
+    a = app_state
+    data = await body(request)
+    try:
+        voice = a.voices.update_volume(str(data.get("voice", "")), data.get("volume", 100))
+    except VoiceError as e:
+        return fail(str(e))
+    except Exception as e:
+        log.exception("ошибка громкости голоса")
+        return fail("Не удалось изменить громкость: %s" % e, 500)
     a.broadcast({"type": "voices"})
     return ok(voice=voice)
 
@@ -961,9 +995,11 @@ routes = [
     Route("/api/rvc/train/cancel", api_rvc_train_cancel, methods=["POST"]),
     Route("/api/voices/{voice_id:path}", api_voice_delete, methods=["DELETE"]),
     Route("/api/voice/pitch", api_voice_pitch, methods=["POST"]),
+    Route("/api/voice/volume", api_voice_volume, methods=["POST"]),
     Route("/api/voice/calibrate", api_voice_calibrate, methods=["POST"]),
     Route("/audio/{name}", audio),
-    *([Route("/api/debug/chat", api_debug_chat, methods=["POST"])] if os.environ.get("TTS_MOCK") == "1" else []),
+    # тестовое подключение сообщения из чата - включается переменной окружения
+    *([Route("/api/debug/chat", api_debug_chat, methods=["POST"])] if os.environ.get("TTS_DEBUG_CHAT") == "1" else []),
     Mount("/static", StaticFiles(directory=WEB), name="static"),
 ]
 

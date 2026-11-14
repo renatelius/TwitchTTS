@@ -249,6 +249,16 @@ def clips_f0(clips_dir):
     return round(float(np.median(f0s)), 1) if f0s else 0.0
 
 
+def _vol_int(value, default=100):
+    """Громкость голоса в процентах (0-200)."""
+    if value is None:
+        return default
+    try:
+        return max(0, min(int(round(float(value))), 200))
+    except (TypeError, ValueError):
+        return default
+
+
 class VoiceStore:
     """Голоса: свои (папка voices/) и стандартные (из комплекта модели)."""
 
@@ -273,6 +283,7 @@ class VoiceStore:
             if info.get("type") == "rvc" and (d / "model.pth").exists():
                 out.append({"id": "c:" + d.name, "name": info["name"], "aliases": info.get("aliases", []),
                             "kind": "rvc", "engine": "rvc", "base": info.get("base", ""), "pitch": info.get("pitch", 0),
+                            "volume": _vol_int(info.get("volume")),
                             "index_rate": info.get("index_rate", 0.5), "has_index": (d / "model.index").exists(),
                             "created": info.get("created", 0)})
             elif (d / "latents.pth").exists():
@@ -290,7 +301,8 @@ class VoiceStore:
                                 "cv_seconds": info.get("cv_seconds", 0),
                                 "cv_text": info.get("cv_text", ""),
                                 "seconds": info.get("seconds", 0), "created": info.get("created", 0),
-                                "pitch": info.get("pitch", 0), "ref_f0": info.get("ref_f0", 0)})
+                                "pitch": info.get("pitch", 0), "ref_f0": info.get("ref_f0", 0),
+                                "volume": _vol_int(info.get("volume"))})
                 except Exception:
                     log.exception("битый голос в папке %s", d)
         out.sort(key=lambda v: v["name"].lower())
@@ -418,6 +430,23 @@ class VoiceStore:
             shutil.rmtree(tmp, ignore_errors=True)
             raise
         return self.get("c:" + folder)
+
+    def update_volume(self, voice_id, volume):
+        """Своя громкость голоса (проценты, 0-200)."""
+        voice = self.get(voice_id)
+        if not voice:
+            raise VoiceError("Голос не найден.")
+        meta = self.root / voice_id.partition(":")[2] / "voice.json"
+        if not meta.exists():
+            raise VoiceError("У голоса нет файла настроек.")
+        info = json.loads(meta.read_text(encoding="utf-8-sig"))
+        try:
+            val = int(round(float(volume)))
+        except (TypeError, ValueError):
+            val = 100
+        info["volume"] = max(0, min(val, 200))
+        meta.write_text(json.dumps(info, ensure_ascii=False, indent=2), encoding="utf-8")
+        return self.get(voice_id)
 
     def update_pitch(self, voice_id, pitch):
         """Сдвиг тона (полутона) для своего голоса."""
