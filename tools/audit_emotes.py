@@ -16,6 +16,41 @@ TONE_HZ = 440.0
 TONE_SEC = 0.3
 TONE_AMP = 0.9
 
+import atexit
+import shutil
+
+
+_HIDDEN = []
+
+
+def hide_voice_clips(voice_name):
+    """Свои клипы голоса (sounds/<эмоция>/<голос>/) на время аудита прячем.
+
+    Аудит проверяет общий механизм: запись из sounds/ важнее генерации голосом.
+    Если у голоса есть свои клипы, они всегда выигрывают, и проверка общего
+    пути становится невозможной - поэтому мы их временно убираем.
+    """
+    for key in ("laugh",):
+        src_dir = os.path.join(SOUNDS, key, voice_name)
+        if os.path.isdir(src_dir):
+            dst_dir = src_dir + "__audit_hidden"
+            if os.path.isdir(dst_dir):
+                shutil.rmtree(dst_dir)
+            os.rename(src_dir, dst_dir)
+            _HIDDEN.append((src_dir, dst_dir))
+
+
+def restore_voice_clips():
+    for src_dir, dst_dir in _HIDDEN:
+        if os.path.isdir(dst_dir):
+            if os.path.isdir(src_dir):
+                shutil.rmtree(src_dir)
+            os.rename(dst_dir, src_dir)
+    del _HIDDEN[:]
+
+
+atexit.register(restore_voice_clips)
+
 FAILED = []
 
 
@@ -81,6 +116,8 @@ def announce(text, voice_id=None):
 voices = api("/api/voices")["voices"]
 xtts = next((v for v in voices if v.get("kind") == "custom" and v.get("engine") != "cosy"), None)
 rvc = next((v for v in voices if v.get("kind") == "rvc"), None)
+if xtts:
+    hide_voice_clips(xtts["name"])
 
 # 1) эндпоинт со списком эмоций
 info = api("/api/emotes")
@@ -152,6 +189,23 @@ try:
 finally:
     if os.path.exists(CLIP):
         os.remove(CLIP)
+
+# 7) у голоса со своими клипами они важнее общих
+restore_voice_clips()
+if xtts:
+    own_dir = os.path.join(SOUNDS, "laugh", xtts["name"])
+    has_own = os.path.isdir(own_dir) and any(f.endswith(".wav") for f in os.listdir(own_dir))
+    gen5 = api("/api/emotes").get("generated", {}).get("laugh", 0)
+    wav5, res5 = announce("(смех) привет", xtts["id"])
+    gen6 = api("/api/emotes").get("generated", {}).get("laugh", 0)
+    if has_own:
+        check("свой клип голоса важнее общего - генерации не было", gen6 == gen5,
+              "счётчик %s -> %s" % (gen5, gen6))
+        check("озвучка со своим клипом синтезирована", wav5 is not None and len(wav5) > 1000,
+              res5.get("error") or len(wav5 or b""))
+    else:
+        check("у голоса нет своих клипов - звук генерируется голосом", gen6 > gen5,
+              "счётчик %s -> %s" % (gen5, gen6))
 
 print()
 print("Провалено: %d" % len(FAILED))

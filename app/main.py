@@ -417,6 +417,83 @@ class App:
         self.wake.set()
         self.push_status()
 
+    # ---------- CosyVoice 3 с записями эмоций ----------
+    def _cosy_parts(self, segs, voice):
+        """Разбивает куски на части для CosyVoice 3: записи из sounds/ и текст.
+
+        Запись из sounds/ важнее собственных тегов модели: если для этого голоса
+        есть клип (настоящий смех, крик), он вклеивается, а остальные эмоции
+        CosyVoice 3 произносит сам тегами ([laughter], [sigh]...).
+        """
+        parts = []
+        run = []
+
+        def flush():
+            if not run:
+                return
+            text, tagged = emotelib.cosy_text(run, self.settings["language"])
+            if text:
+                parts.append(("text", text, tagged))
+            del run[:]
+
+        for kind, val in segs:
+            if kind != "emote":
+                run.append((kind, val))
+                continue
+            samples = None
+            try:
+                samples = self.emotes.clip(val, voice)
+            except Exception:
+                samples = None
+            if samples is not None and len(samples):
+                flush()
+                parts.append(("audio", samples, False))
+            else:
+                run.append((kind, val))
+        flush()
+        return parts
+
+    def _render_cosy(self, segs, voice, out_path):
+        """Синтез CosyVoice 3 с учётом записей эмоций из sounds/."""
+        parts = self._cosy_parts(segs, voice)
+        if not parts:
+            raise ValueError("нечего читать")
+        prompt, prompt_text = self.voices.cosyvoice_prompt(voice["id"])
+        self.ensure_cosyvoice()
+        if len(parts) == 1 and parts[0][0] == "text":
+            text, tagged = parts[0][1], parts[0][2]
+            return self.cosyvoice.synthesize(text, prompt, prompt_text, out_path,
+                                             self.settings["speed"], tags=tagged)
+        import numpy as np
+        chunks = []
+        for kind, val, tagged in parts:
+            if kind == "audio":
+                chunks.append(np.asarray(val, dtype=np.float32).reshape(-1))
+                continue
+            tmp = CACHE / ("cv_%s.wav" % uuid.uuid4().hex)
+            try:
+                self.cosyvoice.synthesize(val, prompt, prompt_text, tmp,
+                                          self.settings["speed"], tags=tagged)
+                x = _read_samples(tmp, OUT_SR)
+                if x is not None and len(x):
+                    chunks.append(x)
+            finally:
+                try:
+                    tmp.unlink()
+                except OSError:
+                    pass
+        if not chunks:
+            raise ValueError("нечего читать")
+        gap = np.zeros(int(0.12 * OUT_SR), dtype=np.float32)
+        joined = []
+        for i, x in enumerate(chunks):
+            if i:
+                joined.append(gap)
+            joined.append(x)
+        audio = np.concatenate(joined).astype(np.float32)
+        write_wav(out_path, audio, OUT_SR)
+        return len(audio) / float(OUT_SR)
+
     # ---------- очередь: синтез и проигрывание ----------
     def _synth(self, job):
         out = CACHE / ("%s.wav" % uuid.uuid4().hex)
@@ -428,15 +505,7 @@ class App:
             groups = langs.split_by_supported(segs, langs.COSY_LANGS)
             if len(groups) == 1 and groups[0][0]:
                 # CosyVoice 3 в режиме in-context: образец голоса + его точный текст
-                prompt, prompt_text = self.voices.cosyvoice_prompt(voice["id"])
-                self.ensure_cosyvoice()
-                # эмоции CosyVoice 3 играет сам, тегами в тексте: [laughter], [sigh]...
-                text, tagged = emotelib.cosy_text(segs, self.settings["language"])
-                if not text:
-                    raise ValueError("нечего читать")
-                dur = self.cosyvoice.synthesize(text, prompt, prompt_text,
-                                                out, self.settings["speed"], tags=tagged)
-                return out, dur
+                return out, self._render_cosy(segs, voice, out)
             # Смешанный текст: CosyVoice 3 читает то, что умеет (китайский, русский,
             # английский), остальное уходит в XTTS - тембр остаётся тем же голосом.
             parts = []
@@ -444,13 +513,8 @@ class App:
                 tmp = CACHE / ("part_%s.wav" % uuid.uuid4().hex)
                 try:
                     if is_cosy:
-                        prompt, prompt_text = self.voices.cosyvoice_prompt(voice["id"])
-                        self.ensure_cosyvoice()
-                        text, tagged = emotelib.cosy_text(group, self.settings["language"])
-                        if not text:
-                            continue
-                        self.cosyvoice.synthesize(text, prompt, prompt_text, tmp,
-                                                  self.settings["speed"], tags=tagged)
+                        # CosyVoice 3 читает свой кусок (и записи эмоций из sounds/)
+                        self._render_cosy(group, voice, tmp)
                     else:
                         g = self.emotes.resolve(group, voice, self.settings["language"])
                         g = self.emote_segs(g, voice)
