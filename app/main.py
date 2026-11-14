@@ -32,11 +32,12 @@ from starlette.responses import FileResponse, JSONResponse, RedirectResponse, St
 from starlette.routing import Mount, Route  # noqa: E402
 from starlette.staticfiles import StaticFiles  # noqa: E402
 
-from engine import OUT_SR, REF_SR, MockEngine, XttsEngine  # noqa: E402
+from engine import OUT_SR, REF_SR, MockEngine, XttsEngine, write_wav  # noqa: E402
 import rvc as rvclib  # noqa: E402
 import cosyvoice as cvlib  # noqa: E402
 from textproc import clean_text, segments  # noqa: E402
 import emotes as emotelib  # noqa: E402
+import langs  # noqa: E402
 from twitch import TwitchChat, normalize_channel  # noqa: E402
 from voices import VoiceError, VoiceStore, decode as decode_audio, measure_f0  # noqa: E402
 from rvc_train import RvcTrainer, TrainError  # noqa: E402
@@ -424,16 +425,59 @@ class App:
         voice = self.voices.get(job["voice_id"])
         pitch = self.voices.effective_pitch(voice)
         if voice and voice.get("engine") == "cosy":
-            # CosyVoice 3 в режиме in-context: образец голоса + его точный текст
-            prompt, prompt_text = self.voices.cosyvoice_prompt(voice["id"])
-            self.ensure_cosyvoice()
-            # эмоции CosyVoice 3 играет сам, тегами в тексте: [laughter], [sigh]...
-            text, tagged = emotelib.cosy_text(segs, self.settings["language"])
-            if not text:
+            groups = langs.split_by_supported(segs, langs.COSY_LANGS)
+            if len(groups) == 1 and groups[0][0]:
+                # CosyVoice 3 в режиме in-context: образец голоса + его точный текст
+                prompt, prompt_text = self.voices.cosyvoice_prompt(voice["id"])
+                self.ensure_cosyvoice()
+                # эмоции CosyVoice 3 играет сам, тегами в тексте: [laughter], [sigh]...
+                text, tagged = emotelib.cosy_text(segs, self.settings["language"])
+                if not text:
+                    raise ValueError("нечего читать")
+                dur = self.cosyvoice.synthesize(text, prompt, prompt_text,
+                                                out, self.settings["speed"], tags=tagged)
+                return out, dur
+            # Смешанный текст: CosyVoice 3 читает то, что умеет (китайский, русский,
+            # английский), остальное уходит в XTTS - тембр остаётся тем же голосом.
+            parts = []
+            for is_cosy, group in groups:
+                tmp = CACHE / ("part_%s.wav" % uuid.uuid4().hex)
+                try:
+                    if is_cosy:
+                        prompt, prompt_text = self.voices.cosyvoice_prompt(voice["id"])
+                        self.ensure_cosyvoice()
+                        text, tagged = emotelib.cosy_text(group, self.settings["language"])
+                        if not text:
+                            continue
+                        self.cosyvoice.synthesize(text, prompt, prompt_text, tmp,
+                                                  self.settings["speed"], tags=tagged)
+                    else:
+                        g = self.emotes.resolve(group, voice, self.settings["language"])
+                        g = self.emote_segs(g, voice)
+                        if not g:
+                            continue
+                        self.engine.synthesize(g, self.voices.latents(voice["id"]),
+                                               tmp, self.settings["speed"], 0.0)
+                    x = _read_samples(tmp, OUT_SR)
+                    if x is not None and len(x):
+                        parts.append(x)
+                finally:
+                    try:
+                        tmp.unlink()
+                    except OSError:
+                        pass
+            if not parts:
                 raise ValueError("нечего читать")
-            dur = self.cosyvoice.synthesize(text, prompt, prompt_text,
-                                            out, self.settings["speed"], tags=tagged)
-            return out, dur
+            import numpy as np
+            gap = np.zeros(int(0.12 * OUT_SR), dtype=np.float32)
+            joined = []
+            for i, x in enumerate(parts):
+                if i:
+                    joined.append(gap)
+                joined.append(x)
+            audio = np.concatenate(joined).astype(np.float32)
+            write_wav(out, audio, OUT_SR)
+            return out, len(audio) / float(OUT_SR)
         # XTTS и RVC тегов эмоций не знают: вклеиваем записи из папки sounds/,
         # а если их нет - генерируем звук тем же голосом
         segs = self.emotes.resolve(segs, voice, self.settings["language"])

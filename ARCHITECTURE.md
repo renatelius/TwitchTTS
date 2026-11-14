@@ -179,6 +179,11 @@ python tools/sync_poll_css.py
 * Японский требует `cutlet` со словарём MeCab: `engine._setup_japanese()` создаёт
   `data/mecabrc` и прописывает `FUGASHI_TAGGER_ARGS`. Китайский — пакет `pypinyin`.
 * Пакеты `pypinyin cutlet unidic-lite` ставит `install.bat`.
+* Выбор движка по языку: `langs.COSY_LANGS` (ru, en, zh) — языки, которые читает
+  CosyVoice 3; `langs.split_by_supported()` делит куски на группы. В `main.App._synth`
+  группа CosyVoice синтезируется моделью, остальное — XTTS с латантами того же голоса,
+  части склеиваются паузой. Проверено: корейский на CosyVoice-голосе уходит в XTTS
+  (3/3 верно), китайский остаётся в CosyVoice.
 * Лишний «хвост» XTTS: `engine.too_long()` оценивает ожидаемую длительность по числу
   символов (иероглифы — 0,3 с на символ, остальные — 0,12 с на букву). Если рендер
   явно длиннее нормы, `engine.XttsEngine._infer()` повторяет синтез с другой temperature

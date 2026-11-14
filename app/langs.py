@@ -13,6 +13,33 @@ hu, ko, ja, hi. Остальные читаются ближайшим родс�
 XTTS_LANGS = ("en", "es", "fr", "de", "it", "pt", "pl", "tr", "ru", "nl", "cs",
               "ar", "zh-cn", "hu", "ko", "ja", "hi")
 
+# Языки, которые читает CosyVoice 3: модель китайско-английская, корейский
+# и японский ею не читаются (проверено: на корейском выдаёт зависший слог).
+# Такие куски озвучивает XTTS - тембр остаётся тем же голосом.
+COSY_LANGS = ("ru", "en", "zh")
+
+
+def split_by_supported(segs, supported):
+    """Делит куски текста на группы по тому, умеет ли движок этот язык.
+
+    Возвращает список пар (умеет, куски). Эмоция достаётся к предыдущему
+    куску: у CosyVoice это его собственный тег, у XTTS - запись из sounds/.
+    """
+    groups = []
+    for kind, val in segs:
+        if kind == "emote":
+            if groups:
+                groups[-1][1].append((kind, val))
+                continue
+            is_ok = True
+        else:
+            is_ok = kind in supported
+        if not groups or groups[-1][0] != is_ok:
+            groups.append((is_ok, []))
+        groups[-1][1].append((kind, val))
+    return groups
+
+
 # Язык -> ближайший поддерживаемый XTTS.
 FALLBACK = {
     "uk": "ru", "be": "ru", "bg": "ru", "sr": "ru", "mk": "ru", "kk": "ru",

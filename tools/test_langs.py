@@ -128,6 +128,22 @@ check("хвост: длинный русский текст - не брак",
       engine.too_long(12.0, "Это длинное предложение из нескольких слов " * 3, "ru"), False)
 check("хвост: короткое слово - не брак", engine.too_long(0.5, "ок", "ru"), False)
 
+# --- CosyVoice 3: китайско-английская модель, остальное уходит в XTTS ---
+check("CosyVoice: русский и китайский - CosyVoice",
+      [g[0] for g in langs.split_by_supported([("ru", "привет"), ("zh", "你好")], langs.COSY_LANGS)],
+      [True])
+check("CosyVoice: корейский уходит в XTTS",
+      [g[0] for g in langs.split_by_supported([("ru", "привет"), ("ko", "안녕")], langs.COSY_LANGS)],
+      [True, False])
+check("CosyVoice: японский уходит в XTTS",
+      [g[0] for g in langs.split_by_supported([("ja", "こんにちは")], langs.COSY_LANGS)],
+      [False])
+check("CosyVoice: только корейский - целиком XTTS",
+      [g[0] for g in langs.split_by_supported([("ko", "안녕")], langs.COSY_LANGS)], [False])
+check("CosyVoice: эмоция достаётся к своему куску",
+      langs.split_by_supported([("ko", "안녕"), ("emote", "laugh")], langs.COSY_LANGS)[0][1],
+      [("ko", "안녕"), ("emote", "laugh")])
+
 print()
 print("Провалено: %d" % len(FAILED))
 for f in FAILED:
