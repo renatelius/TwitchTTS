@@ -99,6 +99,74 @@ def read_wav(path):
     return data.astype(np.float32) / 32768.0
 
 
+# XTTS на коротких иероглифических фразах (китайский, японский, корейский)
+# иногда не ставит конец фразы и продолжает говорить: получается посторонний
+# хвост из лишней речи. Такой рендер переспрашиваем другим sample.
+LONG_TAIL_PER_CHAR = {"ko": 0.30, "zh-cn": 0.30, "zh": 0.30, "zh-tw": 0.30, "ja": 0.28}
+LONG_TAIL_OTHER = 0.12
+
+
+def too_long(dur, text, code):
+    """Похоже ли, что XTTS не закончил фразу и добавил лишнее.
+
+    Для иероглифических языков короткая фраза не должна звучать дольше примерно
+    0,3 с на символ, для остальных - 0,12 с на букву.
+    """
+    n = len(text.strip())
+    if n < 2:
+        return False
+    per = LONG_TAIL_PER_CHAR.get(code, LONG_TAIL_OTHER)
+    expected = 0.8 + per * n
+    return dur > max(2.5, expected * 1.8)
+
+
+# Тишина короче этого - просто пауза между словами.
+GAP_MIN = 0.30
+# Речь после паузы длиннее этого считается посторонней.
+TAIL_MIN = 1.20
+
+
+def trim_tail(wav, sr, code, text):
+    """Отрезает постороннюю речь, если XTTS не закончил короткую фразу.
+
+    Иногда после паузы модель продолжает говорить: для короткой фразы (до 12
+    символов) такая речь однозначно лишняя. Длинные фразы не трогаем.
+    """
+    if code not in LONG_TAIL_PER_CHAR:
+        return wav
+    n = len(text.strip())
+    if n < 2 or n > 12:
+        return wav
+    win = max(1, int(sr * 0.02))
+    frames = len(wav) // win
+    if frames < 50:
+        return wav
+    rms = np.sqrt((wav[:frames * win].reshape(frames, win) ** 2).mean(axis=1) + 1e-12)
+    peak = float(rms.max())
+    if peak <= 1e-6:
+        return wav
+    quiet = rms < peak * 0.02
+    gap_len = int(GAP_MIN / 0.02)
+    speech = np.cumsum((~quiet).astype(np.int32))
+    total = int(speech[-1])
+    run = 0
+    gap_start = -1
+    for i in range(frames):
+        if quiet[i]:
+            if run == 0:
+                gap_start = i
+            run += 1
+            continue
+        if run >= gap_len:
+            # пауза кончилась: речь после неё и речь до неё
+            after = total - int(speech[i])
+            before = int(speech[gap_start])
+            if after * 0.02 >= TAIL_MIN and before * 0.02 >= 0.5:
+                return wav[:gap_start * win]
+        run = 0
+    return wav
+
+
 class BaseEngine:
     def __init__(self):
         self.status = "loading"   # loading | ready | error
@@ -264,6 +332,29 @@ class XttsEngine(BaseEngine):
                 return cand
         return supported[0]
 
+    def _infer(self, code, text, latents, speed, temperature):
+        """Синтез куска текста. None, если не получилось даже английским."""
+        try:
+            # enable_text_splitting=False: текст режем сами (textproc),
+            # иначе XTTS просит spacy, которого нет
+            out = self.model.inference(
+                text, code, latents["gpt_cond_latent"], latents["speaker_embedding"],
+                temperature=temperature, speed=float(speed), enable_text_splitting=False)
+        except Exception as e:
+            # язык не прошёл: пробуем английский, иначе пропускаем кусок
+            log.warning("синтез на языке %s не удался (%s) - читаем английским", code, e)
+            try:
+                out = self.model.inference(
+                    text, "en", latents["gpt_cond_latent"], latents["speaker_embedding"],
+                    temperature=temperature, speed=float(speed), enable_text_splitting=False)
+            except Exception as exc:
+                log.warning("синтез не удался: %s", exc)
+                return None
+        wav = out["wav"]
+        if hasattr(wav, "detach"):
+            wav = wav.detach().cpu().numpy()
+        return np.asarray(wav, dtype=np.float32).reshape(-1)
+
     def synthesize(self, segs, latents, out_path, speed=1.0, pitch=0.0):
         torch = self.torch
         parts = []
@@ -276,26 +367,18 @@ class XttsEngine(BaseEngine):
                     parts.append(gap)
                     continue
                 code = self.model_lang(lang)
-                try:
-                    # enable_text_splitting=False: текст режем сами (textproc),
-                    # иначе XTTS просит spacy, которого нет
-                    out = self.model.inference(
-                        text, code, latents["gpt_cond_latent"], latents["speaker_embedding"],
-                        temperature=0.7, speed=float(speed), enable_text_splitting=False)
-                except Exception as e:
-                    # язык не прошёл: пробуем английский, иначе пропускаем кусок
-                    log.warning("синтез на языке %s не удался (%s) - читаем английским", code, e)
-                    try:
-                        out = self.model.inference(
-                            text, "en", latents["gpt_cond_latent"], latents["speaker_embedding"],
-                            temperature=0.7, speed=float(speed), enable_text_splitting=False)
-                    except Exception as exc:
-                        log.warning("синтез не удался: %s", exc)
-                        continue
-                wav = out["wav"]
-                if hasattr(wav, "detach"):
-                    wav = wav.detach().cpu().numpy()
-                wav = np.asarray(wav, dtype=np.float32).reshape(-1)
+                wav = self._infer(code, text, latents, speed, 0.7)
+                if wav is None:
+                    continue
+                if too_long(len(wav) / float(OUT_SR), text, code):
+                    # XTTS на коротких иероглифических фразах иногда не ставит
+                    # конец фразы и продолжает говорить - переспрашиваем другой sample
+                    alt = self._infer(code, text, latents, speed, 0.5)
+                    if alt is not None and len(alt) < len(wav):
+                        wav = alt
+                    if too_long(len(wav) / float(OUT_SR), text, code):
+                        # не помогло - отрезаем постороннюю речь после паузы
+                        wav = trim_tail(wav, OUT_SR, code, text)
                 parts.append(shift_pitch(wav, OUT_SR, float(pitch or 0)))
                 parts.append(gap)
         audio = np.concatenate(parts[:-1]) if parts else np.zeros(1, dtype=np.float32)

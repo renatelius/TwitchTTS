@@ -115,6 +115,19 @@ check("движок: китайский -> zh-cn", e.model_lang("zh"), "zh-cn")
 check("движок: греческий -> en", e.model_lang("el"), "en")
 check("движок: неизвестный -> en", e.model_lang("zz"), "en")
 
+# --- отбраковка лишнего «хвоста» XTTS ---
+check("хвост: корейская фраза с посторонней речью - брак",
+      engine.too_long(5.47, "안녕하세요", "ko"), True)
+check("хвост: корейская фраза в норме - не брак",
+      engine.too_long(1.58, "안녕하세요", "ko"), False)
+check("хвост: китайская фраза в норме - не брак",
+      engine.too_long(1.07, "你好世界", "zh-cn"), False)
+check("хвост: японская фраза в норме - не брак",
+      engine.too_long(1.07, "こんにちは世界", "ja"), False)
+check("хвост: длинный русский текст - не брак",
+      engine.too_long(12.0, "Это длинное предложение из нескольких слов " * 3, "ru"), False)
+check("хвост: короткое слово - не брак", engine.too_long(0.5, "ок", "ru"), False)
+
 print()
 print("Провалено: %d" % len(FAILED))
 for f in FAILED:
