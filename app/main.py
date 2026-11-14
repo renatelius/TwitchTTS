@@ -57,6 +57,26 @@ def _vol_factor(value):
         return 1.0
 
 
+def _read_samples(path, target_sr=OUT_SR):
+    """Читает wav -> моно float32 нужной частоты (для вклейки звуков эмоций)."""
+    import numpy as np
+    import wave
+    try:
+        with wave.open(str(path), "rb") as w:
+            sr = w.getframerate()
+            raw = w.readframes(w.getnframes())
+    except Exception as e:
+        log.warning("не удалось прочитать wav %s: %s", path, e)
+        return None
+    if not raw:
+        return None
+    x = np.frombuffer(raw, dtype="<i2").astype("float32") / 32768.0
+    if len(x) > 1 and sr != target_sr:
+        n = max(1, int(round(len(x) * target_sr / float(sr))))
+        x = np.interp(np.linspace(0, len(x) - 1, n), np.arange(len(x)), x).astype("float32")
+    return x
+
+
 DEFAULTS = {
     "channel": "",
     "autoconnect": True,
@@ -126,6 +146,8 @@ class App:
         self.emotes = emotelib.EmoteSounds(ROOT / "sounds", OUT_SR,
                                            lambda p: (decode_audio(p), REF_SR))
         self.emotes.prepare_folders()
+        self._emote_cache = {}      # (голос, эмоция) -> сгенерированный звук
+        self._emote_gen = {}        # эмоция -> сколько раз звук генерировался
         self._train_done = False
         self.progress = ""
         self.executor = ThreadPoolExecutor(max_workers=1)   # модель одна, работаем по очереди
@@ -329,6 +351,63 @@ class App:
         return clean_text(text, emote_ranges, int(max_len or self.settings["max_len"]),
                           emotes=bool(self.settings["emotes"]))
 
+    def emote_voice_audio(self, key, voice):
+        """Звук эмоции, сгенерированный выбранным голосом.
+
+        Используется, когда в sounds/<эмоция>/ нет своей записи: программа
+        синтезирует короткую вокализацию («фх…», «ха-ха-ха…») тем же голосом,
+        которым читается сообщение, и вклеивает её отдельным куском.
+        Слово («вдох», «смех») не читается никогда.
+        """
+        if not voice:
+            return None
+        ckey = (voice["id"], key)
+        hit = self._emote_cache.get(ckey)
+        if hit is not None:
+            return hit
+        lang = "en" if self.settings["language"] == "en" else "ru"
+        text = emotelib.vocal_text(key, lang)
+        if not text:
+            return None
+        tmp = CACHE / ("emo_%s.wav" % uuid.uuid4().hex)
+        out = CACHE / ("emo_%s.wav" % uuid.uuid4().hex)
+        samples = None
+        try:
+            pitch = self.voices.effective_pitch(voice)
+            # для RVC-голоса latents() даёт базовый голос: тембр персонажа
+            # наложит общий RVC-проход в _synth, как и для записей из sounds/
+            latents = self.voices.latents(voice["id"])
+            self.engine.synthesize([(lang, text)], latents, tmp, self.settings["speed"], pitch)
+            os.replace(str(tmp), str(out))
+            samples = _read_samples(out, OUT_SR)
+        except Exception as e:
+            log.warning("не удалось сгенерировать звук эмоции %s: %s", key, e)
+            samples = None
+        finally:
+            for p in (tmp, out):
+                try:
+                    p.unlink()
+                except OSError:
+                    pass
+        if samples is None or not len(samples):
+            return None
+        self._emote_cache[ckey] = samples
+        self._emote_gen[key] = self._emote_gen.get(key, 0) + 1
+        return samples
+
+    def emote_segs(self, segs, voice):
+        """Эмоции без записи из sounds/ превращаются в звук, сгенерированный голосом."""
+        out = []
+        for kind, val in segs:
+            if kind != "emote":
+                out.append((kind, val))
+                continue
+            samples = self.emote_voice_audio(val, voice)
+            if samples is not None and len(samples):
+                out.append(("audio", samples))
+            # не получилось - эмоция пропускается, слово не читается
+        return out
+
     def enqueue(self, msg_id, user, speak_text, voice):
         self.pending.append({"id": msg_id, "user": user, "text": speak_text, "voice_id": voice["id"],
                              "voice_name": voice["name"],
@@ -355,10 +434,12 @@ class App:
             dur = self.cosyvoice.synthesize(text, prompt, prompt_text,
                                             out, self.settings["speed"], tags=tagged)
             return out, dur
-        # XTTS и RVC тегов эмоций не знают: вклеиваем записи из папки sounds/
+        # XTTS и RVC тегов эмоций не знают: вклеиваем записи из папки sounds/,
+        # а если их нет - генерируем звук тем же голосом
         segs = self.emotes.resolve(segs, voice, self.settings["language"])
+        segs = self.emote_segs(segs, voice)
         if not segs:
-            raise ValueError("для этой эмоции нет ни записи, ни замены")
+            raise ValueError("нечего читать")
         if voice and voice["kind"] == "rvc":
             # сначала читаем текст обычным голосом, потом RVC превращает его в голос персонажа
             pre = CACHE / ("pre_%s.wav" % uuid.uuid4().hex)
@@ -649,9 +730,17 @@ async def api_announce(request):
 
 
 async def api_emotes(request):
-    """Список эмоций и сколько записей лежит в sounds/ - для подсказки в настройках."""
+    """Список эмоций, записи в sounds/ и счётчик звуков, сгенерированных голосом."""
     a = app_state
-    return ok(enabled=bool(a.settings["emotes"]), folder=str(a.emotes.root), emotes=a.emotes.summary())
+    return ok(enabled=bool(a.settings["emotes"]), folder=str(a.emotes.root),
+              emotes=a.emotes.summary(), generated=dict(a._emote_gen))
+
+
+async def api_emotes_reset(request):
+    """Сбрасывает кэш сгенерированных звуков - они будут созданы заново."""
+    a = app_state
+    a._emote_cache.clear()
+    return ok(generated=dict(a._emote_gen))
 
 
 async def api_voices(request):
@@ -1008,6 +1097,7 @@ routes = [
     Route("/api/preview", api_preview, methods=["POST"]),
     Route("/api/announce", api_announce, methods=["POST"]),
     Route("/api/emotes", api_emotes, methods=["GET"]),
+    Route("/api/emotes/reset", api_emotes_reset, methods=["POST"]),
     Route("/api/voices", api_voices, methods=["GET"]),
     Route("/api/voices", api_voice_create, methods=["POST"]),
     Route("/api/voices/toggle", api_voice_toggle, methods=["POST"]),

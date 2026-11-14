@@ -61,7 +61,7 @@ text, tagged = emotes.cosy_text([("ru", "привет"), ("emote", "laugh"), ("r
 check("cosy_text: тег модели", text, "привет [laughter] как дела")
 check("cosy_text: флаг тегов", tagged, True)
 text2, tagged2 = emotes.cosy_text([("emote", "cry")], "ru")
-check("cosy_text: у CosyVoice нет тега плача - замена текстом", text2, "Хнык-хнык.")
+check("cosy_text: у CosyVoice нет тега плача - вокализация", text2, "у-у-у-у...")
 check("cosy_text: плач не помечен как тег", tagged2, False)
 text3, _ = emotes.cosy_text([("emote", "laugh")], "ru")
 check("cosy_text: одно слово смита с тегом", text3, "[laughter]")
@@ -74,11 +74,12 @@ check("папки эмоций созданы", os.path.isdir(os.path.join(sound
 check("ПРОЧТИ.txt создан", os.path.isfile(os.path.join(sounds, "ПРОЧТИ.txt")), True)
 
 res_b = store.resolve([("ru", "привет"), ("emote", "breath")], None, "ru")
-check("resolve: нет ни записи, ни замены -> читаем слово", res_b[1], ("ru", "вдох"))
+check("resolve: нет записи -> кусок остаётся эмоцией (её генерирует голос)",
+      res_b, [("ru", "привет"), ("emote", "breath")])
 
 res = store.resolve([("ru", "привет"), ("emote", "laugh"), ("ru", "как дела")], None, "ru")
-check("resolve без записи -> текст-замена", [k for k, _ in res], ["ru", "ru", "ru"])
-check("resolve без записи -> смех заменён на «Ха-ха-ха!»", res[1][1], "Ха-ха-ха!")
+check("resolve без записи -> эмоция не превращается в слово", [k for k, _ in res], ["ru", "emote", "ru"])
+check("resolve без записи -> ключ эмоции сохранён", res[1][1], "laugh")
 
 # кладём настоящую запись и проверяем, что она подхватывается
 laugh_dir = os.path.join(sounds, "laugh")
@@ -102,6 +103,13 @@ try:
     check("resolve с записью -> это numpy-сигнал", hasattr(res2[1][1], "__len__"), True)
 finally:
     os.remove(wav_path)
+
+# --- вокализация: у каждой эмоции есть свой звук ---
+missing = [k for k in emotes.EMOTES if not emotes.vocal_text(k)]
+check("у всех эмоций есть вокализация", missing, [])
+check("вокализация смеха", emotes.vocal_text("laugh"), "ха-ха-ха!")
+check("вокализация вдоха", emotes.vocal_text("breath"), "фх... фх...")
+check("вокализация на английском", emotes.vocal_text("gasp", "en"), "Aaah!")
 
 # --- воркер CosyVoice: проверка, что нормализация не портит теги ---
 import cosyvoice_worker  # noqa: E402

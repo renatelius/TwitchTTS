@@ -9,10 +9,13 @@
 * дальше всё зависит от движка голоса:
     - CosyVoice 3 умеет смеяться и вздыхать сам: метка превращается в его
       тег ([laughter], [sigh], ...) и звучит голосом персонажа;
-    - XTTS и RVC таких тегов не знают, поэтому в речь вклеивается запись из
-      папки sounds/<эмоция>/ (для RVC она потом проходит через модель и
-      получает тембр персонажа);
-    - если записи нет - читается короткая замена («ха-ха-ха»).
+    - XTTS и RVC таких тегов не знают, поэтому звук эмоции либо берётся из
+      папки sounds/<эмоция>/ (своя запись), либо генерируется тем же голосом:
+      программа синтезирует короткую вокализацию («фх…», «ха-ха-ха…») отдельным
+      куском и вклеивает её в речь. Слово («вдох», «смех») не читается никогда.
+
+Своя запись из sounds/ всегда важнее сгенерированной: она звучит как настоящий
+смех или вздох, а не как озвучка вокализации.
 """
 import logging
 import random
@@ -29,92 +32,86 @@ CLIP_MAX_SEC = 6.0       # длиннее записи из sounds/ обреза
 CLIP_PEAK = 0.7          # громкость вклеенной записи (пик)
 AUDIO_EXT = (".wav", ".mp3", ".ogg", ".flac", ".m4a", ".opus", ".webm", ".mp4")
 
-# key: слова-ремарки (регулярные выражения, целиком), тег CosyVoice 3, замена текстом.
+# key: слова-ремарки (регулярные выражения, целиком), тег CosyVoice 3, вокализация.
 # Теги CosyVoice 3 - из cosyvoice/tokenizer/tokenizer.py (CosyVoice3Tokenizer).
+# "vocal" - короткий звук, который произносит голос, когда своего тега у модели нет.
 EMOTES = {
     "laugh": {
         "title": "смех",
         "words": [r"смех\w*", r"сме[её]тся", r"смеюсь", r"смеясь", r"хохо\w+", r"рж[её]т", r"ржу", r"ору",
-                  r"хихик\w*", r"а?(?:ха[\s-]*){2,}х?", r"(?:хи){2,}", r"(?:хе[\s-]*){2,}", r"лол", r"кек",
+                  r"хихик\w*", r"а?(?:ха[\s-]*){2,}х?", r"(?:хи[\s-]*){2,}", r"(?:хе[\s-]*){2,}", r"лол", r"кек",
                   r"laugh\w*", r"(?:ha){2,}h?", r"lol", r"lmao", r"giggl\w+", r"chuckl\w+"],
         "cosy": "[laughter]",
-        "text": {"ru": "Ха-ха-ха!", "en": "Ha ha ha!"},
+        "vocal": {"ru": "ха-ха-ха!", "en": "Ha ha ha!"},
     },
     "sigh": {
         "title": "вздох",
         "words": [r"вздох\w*", r"вздыха\w+", r"вздохнул\w*", r"sigh\w*"],
         "cosy": "[sigh]",
-        "text": {"ru": "Эх.", "en": "Ahh."},
+        "vocal": {"ru": "э-э-э...", "en": "Ah-ah..."},
     },
     "breath": {
         "title": "вдох",
         "words": [r"вдох\w*", r"выдох\w*", r"выдыха\w+", r"дышит", r"breath\w*", r"inhale\w*", r"exhale\w*"],
         "cosy": "[breath]",
-        "text": {},
+        "vocal": {"ru": "фх... фх...", "en": "Hh... hh..."},
     },
     "cough": {
         "title": "кашель",
         "words": [r"кашел\w*", r"кашля\w+", r"кхм+", r"кхе(?:-?кхе)*", r"cough\w*", r"ahem"],
         "cosy": "[cough]",
-        "text": {"ru": "Кхе-кхе.", "en": "Ahem."},
+        "vocal": {"ru": "кхе-кхе!", "en": "Ahem!"},
     },
     "hmm": {
         "title": "хм",
         "words": [r"хм+", r"мм+", r"задумал\w*", r"думает", r"hm+", r"mm+", r"thinking", r"thinks"],
         "cosy": "[mn]",
-        "text": {"ru": "Хмм.", "en": "Hmm."},
+        "vocal": {"ru": "хм-м-м...", "en": "Hmm..."},
     },
     "tsk": {
         "title": "цоканье",
         "words": [r"цок\w*", r"цык\w*", r"тц+", r"tsk\w*"],
         "cosy": "[clucking]",
-        "text": {"ru": "Тц-тц.", "en": "Tsk tsk."},
+        "vocal": {"ru": "тс-тс!", "en": "Tsk-tsk!"},
     },
     "smack": {
         "title": "чмок",
         "words": [r"чмок\w*", r"причмок\w+", r"поцелу\w+", r"целует", r"smack\w*", r"kiss\w*", r"mwah"],
         "cosy": "[lipsmack]",
-        "text": {"ru": "Чмок.", "en": "Mwah."},
+        "vocal": {"ru": "м-м-м!", "en": "Mwah!"},
     },
     "hiss": {
         "title": "шипение",
         "words": [r"шипит", r"шипение", r"шиплю", r"шш+", r"hiss\w*", r"sh{2,}"],
         "cosy": "[hissing]",
-        "text": {"ru": "Шшш.", "en": "Shh."},
+        "vocal": {"ru": "ссссс...", "en": "Sssss..."},
     },
-    # У CosyVoice 3 нет тегов для этих эмоций: звучат только записи из sounds/ или замена.
+    # У CosyVoice 3 нет тегов для этих эмоций: звучит вокализация, сгенерированная голосом.
     "cry": {
         "title": "плач",
         "words": [r"плач\w*", r"плачу", r"рыда\w+", r"всхлип\w+", r"хнык\w+", r"cry\w*", r"cries", r"sob\w*"],
         "cosy": "",
-        "text": {"ru": "Хнык-хнык.", "en": "Boo hoo."},
+        "vocal": {"ru": "у-у-у-у...", "en": "Sob sob..."},
     },
     "scream": {
         "title": "крик",
         "words": [r"крик\w*", r"крич\w+", r"вопль", r"вопит", r"ор[её]т", r"визж\w+",
                   r"scream\w*", r"yell\w*", r"shout\w*"],
         "cosy": "",
-        "text": {"ru": "А-а-а!", "en": "Aaah!"},
+        "vocal": {"ru": "а-а-а-а-а!", "en": "Aaaah!"},
     },
     "yawn": {
         "title": "зевок",
         "words": [r"зевок", r"зева\w+", r"зевнул\w*", r"yawn\w*"],
         "cosy": "",
-        "text": {"ru": "А-а-ах.", "en": "Aaah."},
+        "vocal": {"ru": "а-а-а-а-а...", "en": "Ah-ah-ah..."},
     },
     "gasp": {
         "title": "ах",
         "words": [r"а+х+", r"о+х+", r"ахает", r"ахнул\w*", r"охает", r"удивл\w+", r"шок", r"в шоке", r"gasp\w*", r"shocked"],
         "cosy": "",
-        "text": {"ru": "Ах!", "en": "Oh!"},
+        "vocal": {"ru": "а-а!", "en": "Aaah!"},
     },
-}
-
-# Если нет ни записи, ни замены - читаем само слово: «(вдох)» -> «вдох».
-WORD_FALLBACK = {
-    "laugh": "смех", "sigh": "вздох", "breath": "вдох", "cough": "кашель",
-    "hmm": "хмм", "tsk": "тц", "smack": "чмок", "hiss": "шипение",
-    "cry": "плач", "scream": "крик", "yawn": "зевок", "gasp": "ах",
 }
 
 # Ремарка - это короткий текст целиком в скобках одного вида: (смех), [смех], *смех*, <смех>
@@ -126,6 +123,12 @@ _KEY_RE = {key: re.compile(_MODIFIER + "(?:" + "|".join(spec["words"]) + ")[.!?]
            for key, spec in EMOTES.items()}
 
 MARK_RE = re.compile(r"\{([a-z]+)\}")
+
+
+def vocal_text(key, lang="ru"):
+    """Вокализация для эмоции: её произносит голос, получается звук, а не слово."""
+    vocal = (EMOTES.get(key) or {}).get("vocal") or {}
+    return vocal.get(lang) or vocal.get("ru") or ""
 
 
 def match_emote(inner):
@@ -177,7 +180,7 @@ def cosy_text(segs, mode="auto"):
             parts.append(spec["cosy"])
             tagged = True
         else:
-            text = spec.get("text", {}).get(lang) or WORD_FALLBACK.get(val)
+            text = vocal_text(val, lang)
             if text:
                 parts.append(text)
     return " ".join(p for p in parts if p).strip(), tagged
@@ -205,6 +208,10 @@ class EmoteSounds:
                          "Положите в папку эмоции один или несколько коротких файлов (до %d секунд):" % CLIP_MAX_SEC,
                          "wav, mp3, ogg, flac, m4a. Если файлов несколько - каждый раз берётся случайный.",
                          "Новые файлы подхватываются сразу, перезапуск не нужен.", "",
+                         "Если файла нет - звук эмоции генерируется тем же голосом, которым читается",
+                         "сообщение (короткая вокализация: «фх…», «ха-ха-ха…»). Своя запись всегда",
+                         "звучит натуральнее, поэтому если нужен настоящий смех или вздох -",
+                         "положите файл сюда.", "",
                          "Папка -> что пишет зритель:"]
                 for key, spec in EMOTES.items():
                     lines.append("  %-7s -> (%s)" % (key, spec["title"]))
@@ -293,23 +300,20 @@ class EmoteSounds:
         return None
 
     def resolve(self, segs, voice=None, mode="auto"):
-        """Заменяет куски ("emote", ключ) на ("audio", запись) или на текст-замену.
+        """Заменяет куски ("emote", ключ) на ("audio", запись), если запись есть.
 
-        Результат понимает engine.synthesize()."""
-        out, lang = [], ("en" if mode == "en" else "ru")
+        Если записи нет - кусок остаётся ("emote", ключ): звук тогда генерирует
+        голос (см. main.emote_voice_audio). Результат понимает engine.synthesize()."""
+        out = []
         for kind, val in segs:
             if kind != "emote":
                 out.append((kind, val))
-                lang = kind if kind in ("ru", "en") else lang
                 continue
             samples = self.clip(val, voice)
             if samples is not None:
                 out.append(("audio", samples))
-                continue
-            spec = EMOTES.get(val) or {}
-            text = spec.get("text", {}).get(lang) or WORD_FALLBACK.get(val)
-            if text:
-                out.append((lang, text))
+            else:
+                out.append(("emote", val))     # звук сгенерирует голос
         return out
 
 

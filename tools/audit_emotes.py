@@ -91,6 +91,8 @@ check("папка sounds указана", "sounds" in (info.get("folder") or "")
 check("нашёлся голос XTTS для проверки", xtts is not None, xtts["name"] if xtts else "-")
 
 # 2) запись из sounds/ вклеивается в речь голоса XTTS
+api("/api/emotes/reset", {})
+gen0 = api("/api/emotes").get("generated", {}).get("laugh", 0)
 make_clip()
 try:
     wav, res = announce("(смех) привет", xtts["id"])
@@ -100,6 +102,9 @@ try:
     check("запись смеха вклеена в речь (тон слышен в сигнале)", amp > 0.15,
           "амплитуда %.3f, длительность %.2f с" % (amp, dur))
     check("длительность больше длины записи", dur > TONE_SEC, "%.2f с" % dur)
+    gen1 = api("/api/emotes").get("generated", {}).get("laugh", 0)
+    check("своя запись из sounds/ важнее генерации", gen1 == gen0,
+          "счётчик %s -> %s" % (gen0, gen1))
 finally:
     if os.path.exists(CLIP):
         os.remove(CLIP)
@@ -115,11 +120,18 @@ if rvc:
         if os.path.exists(CLIP):
             os.remove(CLIP)
 
-# 4) без записи - читается замена
+# 4) без записи - звук эмоции генерирует сам голос
+gen2 = api("/api/emotes").get("generated", {}).get("laugh", 0)
 wav2, res2 = announce("(смех) привет", xtts["id"])
-check("без записи тоже озвучено (замена слова)", wav2 is not None and len(wav2) > 1000, res2.get("error"))
+check("без записи тоже озвучено (звук сгенерирован голосом)", wav2 is not None and len(wav2) > 1000,
+      res2.get("error"))
 amp2, dur2 = tone_amplitude(wav2) if wav2 else (0, 0)
-check("тона записи нет - замена прочитана", amp2 < 0.15, "амплитуда %.3f" % amp2)
+check("тона записи нет - голосом сгенерирован другой звук", amp2 < 0.15, "амплитуда %.3f" % amp2)
+gen3 = api("/api/emotes").get("generated", {}).get("laugh", 0)
+check("звук эмоции сгенерирован голосом", gen3 > gen2, "счётчик %s -> %s" % (gen2, gen3))
+announce("(смех) привет", xtts["id"])
+gen4 = api("/api/emotes").get("generated", {}).get("laugh", 0)
+check("повторный запрос берёт готовый звук из кэша", gen4 == gen3, "счётчик %s" % gen4)
 
 # 5) неизвестная ремарка читается как обычный текст
 wav3, res3 = announce("привет (со скидкой)", xtts["id"])
@@ -134,6 +146,8 @@ try:
     check("при выключенных эмоциях ремарка читается словом", wav4 is not None and len(wav4) > 1000, res4.get("error"))
     amp4, _ = tone_amplitude(wav4) if wav4 else (0, 0)
     check("тона записи нет при выключенных эмоциях", amp4 < 0.15, "амплитуда %.3f" % amp4)
+    gen_off = api("/api/emotes").get("generated", {}).get("laugh", 0)
+    check("при выключенных эмоциях звук не генерируется", gen_off == gen4, "счётчик %s" % gen_off)
     api("/api/settings", {"emotes": True if old is None else old})
 finally:
     if os.path.exists(CLIP):
