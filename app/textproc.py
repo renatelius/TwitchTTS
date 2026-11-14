@@ -1,9 +1,22 @@
 # -*- coding: utf-8 -*-
-"""Очистка сообщений чата, поиск эмоций и разбиение текста на русские/английские куски."""
+"""Очистка сообщений чата, поиск эмоций и разбиение текста на языковые куски."""
 import re
 
+import langs
+
 URL_RE = re.compile(r"(https?://\S+|www\.\S+|\b[\w-]+\.(?:com|ru|tv|net|org|gg|io|me|su|рф)(?:/\S*)?)", re.I)
-ALLOWED_RE = re.compile(r"[^0-9A-Za-zА-Яа-яЁё\s.,!?;:'\"()%+\-–—/&№$€₽]")
+# Разрешены буквы всех распространённых алфавитов: латиница (с диакритикой),
+# кириллица, греческий, иврит, арабский, деванагари, тайский, иероглифы,
+# кана, хангыль.
+ALLOWED_RE = re.compile(
+    r"[^0-9A-Za-z\u00C0-\u024F\u0370-\u03FF\u0400-\u04FF\u0530-\u058F\u0590-\u05FF"
+    r"\u0600-\u06FF\u0750-\u077F\u0900-\u097F\u0E00-\u0E7F\u1100-\u11FF\u3040-\u30FF"
+    r"\u3130-\u318F\u3400-\u4DBF\u4E00-\u9FFF\uAC00-\uD7AF\uF900-\uFAFF"
+    r"\s.,!?;:'\"()%+\-\u2013\u2014/&№$€₽]")
+LETTER_RE = re.compile(
+    r"[A-Za-z\u00C0-\u024F\u0370-\u03FF\u0400-\u04FF\u0530-\u058F\u0590-\u05FF"
+    r"\u0600-\u06FF\u0750-\u077F\u0900-\u097F\u0E00-\u0E7F\u3040-\u30FF"
+    r"\u3400-\u4DBF\u4E00-\u9FFF\uAC00-\uD7AF]")
 REPEAT_CHAR_RE = re.compile(r"(.)\1{3,}")
 REPEAT_PUNCT_RE = re.compile(r"([.,!?;:\-])\1+")
 SPACE_RE = re.compile(r"\s+")
@@ -44,15 +57,13 @@ def _cut(text, max_len):
 
 
 def _speakable(text):
-    return bool(CYR_RE.search(text) or LAT_RE.search(text) or re.search(r"\d", text))
+    """Есть ли что произнести: буква любого алфавита или цифра."""
+    return bool(LETTER_RE.search(text)) or bool(re.search(r"\d", text))
 
 
 def clean_text(text, emote_ranges=None, max_len=200, emotes=False):
-    """Чистит сообщение.
-
-    При emotes=True ремарки вроде (смех) или *вздыхает* заменяются метками
-    {laugh}, {sigh} - их потом озвучивает emotes.py.
-    """
+    """Чистит сообщение. При emotes=True ремарки вроде (смех) или *вздыхает*
+    заменяются метками {laugh}, {sigh} - их потом озвучивает emotes.py."""
     text = strip_emotes(text, emote_ranges)
     text = URL_RE.sub(" ", text)
     if not emotes:
@@ -75,16 +86,15 @@ def clean_text(text, emote_ranges=None, max_len=200, emotes=False):
     return " ".join(out) if spoken else ""
 
 
-def _word_lang(word):
-    if CYR_RE.search(word):
-        return "ru"
-    if LAT_RE.search(word):
-        return "en"
-    return None
+def _word_lang(word, dominant="en"):
+    """Язык слова: None, если в слове нет букв."""
+    if not LETTER_RE.search(word):
+        return None
+    return langs.word_code(word, dominant)
 
 
 def _letters(s):
-    return len(CYR_RE.findall(s)) + len(LAT_RE.findall(s))
+    return len(LETTER_RE.findall(s))
 
 
 def _split_long(text, limit):
@@ -114,9 +124,11 @@ def _text_segments(text, mode="auto"):
     if mode in ("ru", "en"):
         runs = [(mode, text)]
     else:
+        # авто: язык определяется по всему сообщению, отдельные слова уточняют
+        dominant = langs.detect(text)
         runs = []
         for word in text.split(" "):
-            lang = _word_lang(word)
+            lang = _word_lang(word, dominant)
             if runs and (lang is None or lang == runs[-1][0]):
                 runs[-1] = (runs[-1][0], runs[-1][1] + " " + word)
             elif not runs:
@@ -126,16 +138,20 @@ def _text_segments(text, mode="auto"):
             else:
                 runs.append((lang, word))
         if runs and runs[0][0] is None:
-            runs[0] = ("ru", runs[0][1])
-        # короткие латинские вставки (1-2 буквы: gg, ok) приклеиваем к русскому куску
+            runs[0] = (dominant, runs[0][1])
+        # короткие вставки (1-2 буквы: gg, ok) приклеиваем к соседнему куску
         merged = []
         for lang, part in runs:
-            if merged and lang == "en" and _letters(part) < 3:
-                merged[-1] = (merged[-1][0], merged[-1][1] + " " + part)
-            elif merged and lang == "ru" and merged[-1][0] == "en" and _letters(merged[-1][1]) < 3:
-                merged[-1] = ("ru", merged[-1][1] + " " + part)
-            elif merged and merged[-1][0] == lang:
-                merged[-1] = (lang, merged[-1][1] + " " + part)
+            if not merged:
+                merged.append((lang, part))
+                continue
+            prev_lang, prev_part = merged[-1]
+            if _letters(part) < 3:
+                merged[-1] = (prev_lang, prev_part + " " + part)
+            elif _letters(prev_part) < 3:
+                merged[-1] = (lang, prev_part + " " + part)
+            elif prev_lang == lang:
+                merged[-1] = (lang, prev_part + " " + part)
             else:
                 merged.append((lang, part))
         runs = merged

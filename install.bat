@@ -42,7 +42,8 @@ if not exist "venv\Scripts\python.exe" (
 set "VPY=%~dp0venv\Scripts\python.exe"
 
 echo  [3/5] Ставлю PyTorch под вашу видеокарту...
-"%VPY%" -m pip install --upgrade pip uv --quiet || goto fail
+"%VPY%" -m pip install --upgrade pip
+"%VPY%" -m pip install pypinyin cutlet unidic-lite uv --quiet || goto fail
 "%VPY%" -m uv pip install --python "%VPY%" torch torchaudio --torch-backend=auto || goto fail
 "%VPY%" -m uv pip install --python "%VPY%" torchcodec --torch-backend=auto || echo  (torchcodec не поставился - это не страшно)
 

@@ -9,6 +9,34 @@ from pathlib import Path
 
 import numpy as np
 
+import langs
+
+
+def _setup_japanese():
+    """Словарь MeCab для японского.
+
+    XTTS для японского зовёт cutlet, а cutlet требует mecabrc со словарём.
+    Если установлен unidic-lite - указываем на него, иначе японский не читается.
+    """
+    if os.environ.get("FUGASHI_TAGGER_ARGS"):
+        return
+    try:
+        import unidic_lite
+    except Exception:
+        return
+    dic = os.path.join(os.path.dirname(unidic_lite.__file__), "dicdir")
+    if not os.path.isdir(dic):
+        return
+    try:
+        data = Path(__file__).resolve().parent.parent / "data"
+        data.mkdir(parents=True, exist_ok=True)
+        rc = data / "mecabrc"
+        if not rc.exists():
+            rc.write_text("dicdir = %s\n" % dic, encoding="utf-8")
+        os.environ["FUGASHI_TAGGER_ARGS"] = "-C%s" % rc
+    except OSError:
+        pass
+
 
 def _setup_hf_cache():
     """Кэш моделей HuggingFace (XTTS) держим рядом с программой, а не на диске C:.
@@ -33,6 +61,7 @@ def _setup_hf_cache():
 
 
 _setup_hf_cache()
+_setup_japanese()
 
 log = logging.getLogger("engine")
 
@@ -219,6 +248,22 @@ class XttsEngine(BaseEngine):
             data = self.torch.load(str(path), map_location="cpu")
         return self._to_dev(data)
 
+    def model_lang(self, lang):
+        """Код языка, который понимает модель XTTS.
+
+        Модель проверяет код ассертом и падает на незнакомом, поэтому лишние
+        языки переводим в ближайшего родственника (украинский -> русский).
+        """
+        supported = list(getattr(self.config, "languages", None) or langs.XTTS_LANGS)
+        code = langs.to_xtts(lang)
+        if code in supported:
+            return code
+        script = langs.script_of_lang(lang)
+        for cand in (("ru", "en") if script == "cyr" else ("en", "ru")):
+            if cand in supported:
+                return cand
+        return supported[0]
+
     def synthesize(self, segs, latents, out_path, speed=1.0, pitch=0.0):
         torch = self.torch
         parts = []
@@ -230,9 +275,21 @@ class XttsEngine(BaseEngine):
                     parts.append(np.asarray(text, dtype=np.float32).reshape(-1))
                     parts.append(gap)
                     continue
-                out = self.model.inference(
-                    text, lang, latents["gpt_cond_latent"], latents["speaker_embedding"],
-                    temperature=0.7, speed=float(speed), enable_text_splitting=True)
+                code = self.model_lang(lang)
+                try:
+                    out = self.model.inference(
+                        text, code, latents["gpt_cond_latent"], latents["speaker_embedding"],
+                        temperature=0.7, speed=float(speed), enable_text_splitting=True)
+                except Exception as e:
+                    # язык не прошёл: пробуем английский, иначе пропускаем кусок
+                    log.warning("синтез на языке %s не удался (%s) - читаем английским", code, e)
+                    try:
+                        out = self.model.inference(
+                            text, "en", latents["gpt_cond_latent"], latents["speaker_embedding"],
+                            temperature=0.7, speed=float(speed), enable_text_splitting=True)
+                    except Exception as exc:
+                        log.warning("синтез не удался: %s", exc)
+                        continue
                 wav = out["wav"]
                 if hasattr(wav, "detach"):
                     wav = wav.detach().cpu().numpy()
