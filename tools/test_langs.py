@@ -70,6 +70,30 @@ check("принудительный язык ru", [s[0] for s in segs], ["ru"])
 segs = textproc.segments("hello there", "en")
 check("принудительный язык en", [s[0] for s in segs], ["en"])
 
+# --- разбиение длинных текстов (лимиты токенизатора XTTS) ---
+long_zh = "你好世界。" * 40
+segs = textproc.segments(long_zh, "auto")
+check("китайский текст режется на куски", len(segs) > 1, True)
+check("все китайские куски в лимите (70)", all(len(s[1]) <= 70 for s in segs if s[0] == "zh"), True)
+check("китайский кусок не рвётся посреди фразы",
+      all(s[1].endswith("。") for s in segs if s[0] == "zh"), True)
+segs = textproc.segments("こんにちは世界。" * 30, "auto")
+check("японский текст режется на куски", len(segs) > 1, True)
+check("все японские куски в лимите (60)", all(len(s[1]) <= 60 for s in segs if s[0] == "ja"), True)
+check("японский кусок не рвётся посреди фразы",
+      all(s[1].endswith("。") for s in segs if s[0] == "ja"), True)
+segs = textproc.segments("你好世界" * 50, "auto")
+check("китайский без пунктуации режется по лимиту",
+      len(segs) > 1 and all(len(s[1]) <= 70 for s in segs), True)
+long_ru = "Это первое предложение для проверки. " * 12
+segs = textproc.segments(long_ru, "auto")
+check("русский текст режется на куски", len(segs) > 1, True)
+check("все русские куски в лимите (170)", all(len(s[1]) <= 170 for s in segs if s[0] == "ru"), True)
+check("русский кусок заканчивается точкой",
+      all(s[1].endswith(".") for s in segs if s[0] == "ru"), True)
+segs = textproc.segments("первое предложение. второе предложение. третье.", "auto")
+check("короткий русский текст - один кусок", len(segs), 1)
+
 # --- движок: код языка, который понимает модель ---
 import engine            # noqa: E402
 

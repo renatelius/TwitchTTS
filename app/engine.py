@@ -277,16 +277,18 @@ class XttsEngine(BaseEngine):
                     continue
                 code = self.model_lang(lang)
                 try:
+                    # enable_text_splitting=False: текст режем сами (textproc),
+                    # иначе XTTS просит spacy, которого нет
                     out = self.model.inference(
                         text, code, latents["gpt_cond_latent"], latents["speaker_embedding"],
-                        temperature=0.7, speed=float(speed), enable_text_splitting=True)
+                        temperature=0.7, speed=float(speed), enable_text_splitting=False)
                 except Exception as e:
                     # язык не прошёл: пробуем английский, иначе пропускаем кусок
                     log.warning("синтез на языке %s не удался (%s) - читаем английским", code, e)
                     try:
                         out = self.model.inference(
                             text, "en", latents["gpt_cond_latent"], latents["speaker_embedding"],
-                            temperature=0.7, speed=float(speed), enable_text_splitting=True)
+                            temperature=0.7, speed=float(speed), enable_text_splitting=False)
                     except Exception as exc:
                         log.warning("синтез не удался: %s", exc)
                         continue

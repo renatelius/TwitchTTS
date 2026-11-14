@@ -23,8 +23,14 @@ SPACE_RE = re.compile(r"\s+")
 CYR_RE = re.compile(r"[А-Яа-яЁё]")
 LAT_RE = re.compile(r"[A-Za-z]")
 
-# Максимальная длина одного куска, который отдаётся модели (у XTTS есть лимит на язык)
-CHUNK_LIMIT = {"ru": 160, "en": 220}
+# Максимальная длина куска, который отдаётся модели. Ориентир - лимиты
+# токенизатора XTTS (char_limits) минус небольшой запас.
+CHUNK_LIMIT = {
+    "ru": 170, "en": 220, "de": 220, "fr": 220, "es": 220, "it": 200, "pt": 190,
+    "pl": 210, "nl": 220, "tr": 210, "cs": 175, "hu": 210, "ar": 150, "hi": 140,
+    "zh": 70, "ja": 60, "ko": 85,
+}
+CHUNK_DEFAULT = 160
 
 
 def strip_emotes(text, emote_ranges):
@@ -97,23 +103,81 @@ def _letters(s):
     return len(LETTER_RE.findall(s))
 
 
-def _split_long(text, limit):
-    """Режет длинный текст на куски не длиннее limit, по знакам препинания или пробелам."""
+# Знаки конца фразы: европейские и восточноазиатские (китайский,
+# японский, корейский пишут без пробелов - резать надо по пунктуации).
+SENT_MARKS = (". ", "! ", "? ", "; ", ", ", " ", "。", "！", "？", "…", "，", "、")
+# Восточноазиатская пунктуация: конец фразы сразу, без пробела после.
+SENT_END_CJK = "。！？…；"
+# Иероглифы, кана, хангыль: между ними пробелы не нужны.
+CJK_RE = re.compile(r"[\u3040-\u30FF\u3400-\u4DBF\u4E00-\u9FFF\uAC00-\uD7AF\uFF01-\uFF60]")
+
+
+def _join_text(a, b):
+    """Склеивает два куска: без пробела, если это восточноазиатский текст."""
+    if a and b and CJK_RE.search(a[-1]) and CJK_RE.search(b[0]):
+        return a + b
+    return a + " " + b
+
+
+def _sentences(text):
+    """Делит текст на предложения, знак конца остаётся в куске."""
     out = []
-    text = text.strip()
+    buf = []
+    i = 0
+    n = len(text)
+    while i < n:
+        ch = text[i]
+        buf.append(ch)
+        i += 1
+        if ch in ".!?;":
+            # европейская пунктуация: конец фразы, если дальше пробел или конец текста
+            if i >= n or text[i] == " ":
+                out.append("".join(buf))
+                buf = []
+        elif ch in SENT_END_CJK:
+            out.append("".join(buf))
+            buf = []
+    if buf:
+        out.append("".join(buf))
+    return [s.strip() for s in out if s.strip()]
+
+
+def _hard_split(text, limit):
+    """Режет текст по лимиту, стараясь не разрывать слова."""
+    out = []
     while len(text) > limit:
-        cut = -1
-        for mark in (". ", "! ", "? ", "; ", ", ", " "):
-            pos = text.rfind(mark, 0, limit)
-            if pos > limit * 0.4:
-                cut = pos + len(mark) - 1
-                break
-        if cut <= 0:
+        space = text.rfind(" ", 0, limit + 1)
+        if space > limit * 0.4:
+            cut = space + 1
+        else:
             cut = limit
         out.append(text[:cut].strip())
         text = text[cut:].strip()
     if text:
         out.append(text)
+    return out
+
+
+def _split_long(text, limit):
+    """Режет длинный текст на куски не длиннее limit, по границам предложений."""
+    out = []
+    buf = ""
+    for sent in _sentences(text.strip()):
+        if len(sent) > limit:
+            if buf:
+                out.append(buf)
+                buf = ""
+            out.extend(_hard_split(sent, limit))
+            continue
+        if not buf:
+            buf = sent
+        elif len(_join_text(buf, sent)) <= limit:
+            buf = _join_text(buf, sent)
+        else:
+            out.append(buf)
+            buf = sent
+    if buf:
+        out.append(buf)
     return out
 
 
@@ -157,7 +221,7 @@ def _text_segments(text, mode="auto"):
         runs = merged
     out = []
     for lang, part in runs:
-        for chunk in _split_long(part, CHUNK_LIMIT.get(lang, 160)):
+        for chunk in _split_long(part, CHUNK_LIMIT.get(lang, CHUNK_DEFAULT)):
             out.append((lang, chunk))
     return out
 
