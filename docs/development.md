@@ -31,17 +31,26 @@ venv\Scripts\python.exe tools\test_features3.py      # Twitch API: наград�
 venv\Scripts\python.exe tools\test_chat_rules.py     # таблица правил чата
 venv\Scripts\python.exe tools\test_settings.py       # нормализация настроек
 venv\Scripts\python.exe tools\test_api.py            # маршруты и связность модулей
+venv\Scripts\python.exe tools\test_imports.py        # циклы импортов и неопределённые имена
 venv\Scripts\python.exe tools\test_emotes.py         # эмоции и разбор текста
 venv\Scripts\python.exe tools\test_langs.py          # языки
 venv\Scripts\python.exe tools\audit_emotes.py        # сквозная проверка эмоций (нужен сервер)
 venv\Scripts\python.exe tools\audit_layout.py        # вёрстка страниц (нужен сервер)
 venv\Scripts\python.exe tools\audit_functional.py    # сценарии в браузере (нужен сервер)
 venv\Scripts\python.exe tools\audit_mute_volume.py   # мьют и громкость (нужен сервер)
+venv\Scripts\python.exe tools\test_chat_live.py      # чат и команды через HTTP (нужен сервер)
 ```
 
 Аудиты с пометкой «нужен сервер» бьют по `http://127.0.0.1:8765` — сначала
-поднимите сервер. Каждый набор печатает `Провалено: N`; ненулевое число —
-причина не закрывать задачу.
+поднимите сервер. `test_chat_live.py` бьёт по `http://127.0.0.1:8769` и требует
+сервер с заглушкой и отладочным входом чата:
+
+```
+set TTS_PORT=8769 & set TTS_MOCK=1 & set TTS_DEBUG_CHAT=1
+venv\Scripts\python.exe app\main.py --no-browser
+```
+
+Каждый набор печатает `Провалено: N`; ненулевое число — причина не закрывать задачу.
 
 ## Золотые слепки
 

@@ -3,6 +3,7 @@
 import re
 
 import langs
+from emote_text import mark, split_emotes
 
 URL_RE = re.compile(r"(https?://\S+|www\.\S+|\b[\w-]+\.(?:com|ru|tv|net|org|gg|io|me|su|рф)(?:/\S*)?)", re.I)
 # Разрешены буквы всех распространённых алфавитов: латиница (с диакритикой),
@@ -75,7 +76,6 @@ def clean_text(text, emote_ranges=None, max_len=200, emotes=False):
     if not emotes:
         text = _cut(_clean_plain(text), max_len)
         return text if _speakable(text) else ""
-    from emotes import mark, split_emotes
     out, left, spoken = [], max_len, False
     for kind, val in split_emotes(text):
         if kind == "emote":
@@ -242,12 +242,6 @@ def segments(text, mode="auto"):
         else:
             out.extend(_text_segments(part, mode))
     return out
-
-
-def norm_key(name):
-    """Ключ для сравнения имён голосов: без регистра, пробелов и ё."""
-    name = name.lower().replace("ё", "е")
-    return re.sub(r"[^0-9a-zа-я]", "", name)
 
 
 # ---------- раскладка и ударения ----------

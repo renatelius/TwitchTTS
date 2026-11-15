@@ -12,7 +12,7 @@ from pathlib import Path
 import numpy as np
 
 from engine import REF_SR, write_wav
-from textproc import norm_key
+from textkeys import norm_key
 
 log = logging.getLogger("voices")
 
