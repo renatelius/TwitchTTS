@@ -35,6 +35,7 @@ venv\Scripts\python.exe tools\test_imports.py        # циклы импорто
 venv\Scripts\python.exe tools\test_queue.py           # очередь озвучки (без сервера)
 venv\Scripts\python.exe tools\test_synthesis.py       # модуль синтеза (без моделей)
 venv\Scripts\python.exe tools\bench_queue.py         # замер цикла очереди (нужен сервер)
+venv\Scripts\python.exe tools\ab_compare.py           # слепой A/B наборов качества (оффлайн)
 venv\Scripts\python.exe tools\test_emotes.py         # эмоции и разбор текста
 venv\Scripts\python.exe tools\test_langs.py          # языки
 venv\Scripts\python.exe tools\audit_emotes.py        # сквозная проверка эмоций (нужен сервер)
@@ -104,6 +105,22 @@ venv\Scripts\python.exe tools\quality_baseline.py --out data\quality\after-chang
 
 Правило: если после оптимизации голос звучит иначе — оптимизация откатывается.
 Качество важнее скорости.
+
+Слепое сравнение нескольких наборов — `tools/ab_compare.py`:
+
+```
+venv\Scripts\python.exe tools\ab_compare.py --sets before-G after-G control-G --out data\quality\AB-2026-11-15
+```
+
+Скрипт считает объективные метрики (длительность, RMS, f0, спектральный
+центроид, sha256), собирает слепой комплект: файлы перемешаны и переименованы
+в A/B/C, ключ пишется отдельно в `blind-key.json`. Комплект для прослушивания
+лежит в `data/quality/<дата>/blind-listening.zip` — ключ открывают после
+прослушивания. Итог последнего прогона: `docs/quality-ab-2026-11-15.md`.
+
+Важно: одинаковый sha256 у двух наборов означает побайтово идентичный звук —
+это сильнее любой оценки. Расхождение оценивают, сравнивая с разбросом двух
+прогонов одного кода: он и есть шум движка.
 
 ## Замеры производительности
 
