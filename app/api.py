@@ -404,9 +404,9 @@ async def api_cosyvoice_setup(state, request):
     except cvlib.CosyVoiceError as e:
         return fail(str(e))
     try:
-        a.cosyvoice.start(path)
-    except cvlib.CosyVoiceError as e:
-        return fail(str(e))
+        if not a.start_cosyvoice(path):
+            return fail("Не удалось запустить CosyVoice 3: %s"
+                        % (a.cosyvoice.error or "неизвестная ошибка"), 500)
     except Exception as e:
         log.exception("ошибка запуска CosyVoice 3")
         return fail("Не удалось запустить CosyVoice 3: %s" % e, 500)

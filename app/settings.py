@@ -32,6 +32,7 @@ DEFAULTS = {
     "disabled_voices": [],
     "applio_path": "",
     "cosyvoice_path": "",
+    "cosyvoice_warmup": True,  # грузить CosyVoice 3 сразу при старте: первая реплика не ждёт модель
     "tts_prefix": "",          # читать только сообщения с этим префиксом (пусто - все)
     "fix_layout": False,       # "Ghbdtn vbh" -> "Привет мир"
     "style": "",               # стиль речи по умолчанию: happy/sad/angry/whisper/calm

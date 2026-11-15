@@ -53,6 +53,14 @@ PORT = int(os.environ.get("TTS_PORT", "8765"))
 
 log = logging.getLogger("main")
 
+def _same_path(a, b):
+    """Одинаковые ли пути (с учётом регистра, ссылок и ..)."""
+    try:
+        return os.path.normcase(os.path.realpath(str(a))) == os.path.normcase(os.path.realpath(str(b)))
+    except Exception:
+        return str(a) == str(b)
+
+
 def _vol_factor(value):
     """Громкость голоса (проценты) -> коэффициент 0.0-2.0."""
     try:
@@ -66,7 +74,8 @@ class App:
     def __init__(self):
         self.settings = Settings(DATA / "settings.json")
         self.user_voices = load_json(DATA / "user_voices.json", {})
-        if os.environ.get("TTS_MOCK") == "1":
+        self.mock = os.environ.get("TTS_MOCK") == "1"
+        if self.mock:
             self.engine = MockEngine()
         else:
             self.engine = XttsEngine(license_ok=(DATA / "license_ok.txt").exists())
@@ -79,6 +88,9 @@ class App:
         self.cosyvoice = cvlib.CosyVoiceBridge(APP_DIR / "cosyvoice_worker.py",
                                                DATA / "cosyvoice_log.txt",
                                                self.push_status_threadsafe)
+        # один запуск CosyVoice: ранний старт и запуск по требованию не должны
+        # поднимать второй воркер поверх первого
+        self._cosy_lock = threading.Lock()
         # записи эмоций для движков без собственных тегов (XTTS, RVC): sounds/<эмоция>/
         self.emotes = emotelib.EmoteSounds(ROOT / "sounds", OUT_SR,
                                            lambda p: (decode_audio(p), REF_SR))
@@ -190,25 +202,60 @@ class App:
             self.save_settings()
         return path
 
-    def start_cosyvoice(self):
-        """Запускает CosyVoice 3, если папка с моделью известна (или находится сама)."""
-        path = self.detect_cosyvoice()
-        if not path:
-            return
+    def start_cosyvoice(self, path=None):
+        """Запускает CosyVoice 3, если папка с моделью известна (или находится сама).
+
+        Возвращает True, если воркер запущен или уже работает.
+        """
+        with self._cosy_lock:
+            if self.cosyvoice.status in ("ready", "starting"):
+                if not path or _same_path(self.cosyvoice.path, path):
+                    return True
+                # указана другая папка - поднимаем воркер заново на ней
+            path = path or self.detect_cosyvoice()
+            if not path:
+                return False
+            return self._launch_cosyvoice(path)
+
+    def _launch_cosyvoice(self, path):
+        """Запуск воркера CosyVoice. Вызывать под self._cosy_lock."""
         try:
             self.cosyvoice.start(path)
+            return True
         except Exception as e:
             log.warning("CosyVoice 3 не запущен: %s", e)
             self.cosyvoice.status, self.cosyvoice.error = "error", str(e)
+            return False
+
+    def warmup_cosyvoice(self):
+        """Грузит CosyVoice 3 заранее, чтобы первая реплика не ждала модель.
+
+        Модель поднимается в фоне: запуск программы не задерживается.
+        """
+        if self.mock or not self.settings.get("cosyvoice_warmup", True):
+            return
+        path = self.detect_cosyvoice()
+        if not path:
+            return
+        if self.cosyvoice.status in ("ready", "starting"):
+            return
+        log.info("ранний старт CosyVoice 3: %s", path)
+        self.start_cosyvoice(path)
 
     def ensure_cosyvoice(self):
         """Гарантирует, что воркер CosyVoice 3 запущен."""
         if self.cosyvoice.status in ("ready", "starting"):
             return
-        path = self.settings["cosyvoice_path"] or cvlib.find_cosyvoice(ROOT)
-        if not path:
-            raise cvlib.CosyVoiceError("Не найдена папка CosyVoice 3. Укажите её на вкладке «Голоса».")
-        self.cosyvoice.start(path)
+        with self._cosy_lock:
+            if self.cosyvoice.status in ("ready", "starting"):
+                return
+            path = self.settings["cosyvoice_path"] or cvlib.find_cosyvoice(ROOT)
+            if not path:
+                raise cvlib.CosyVoiceError("Не найдена папка CosyVoice 3. Укажите её на вкладке «Голоса».")
+            try:
+                self.cosyvoice.start(path)
+            except Exception as e:
+                raise cvlib.CosyVoiceError("Не удалось запустить CosyVoice 3: %s" % e)
 
     def save_settings(self):
         self.settings.save()
@@ -601,6 +648,8 @@ class App:
         threading.Thread(target=self.engine.load, daemon=True).start()
         self.start_rvc()
         self.detect_cosyvoice()
+        # CosyVoice 3 поднимается заранее в фоне: первая реплика не ждёт загрузки модели
+        threading.Thread(target=self.warmup_cosyvoice, daemon=True).start()
         self.tasks = [asyncio.create_task(self.queue.worker()),
                       asyncio.create_task(self.watch_engine()),
                       asyncio.create_task(self.poll_followers())]

@@ -303,8 +303,8 @@
       "path": "/voices",
       "status": 200,
       "content_type": "text/html",
-      "body_sha1": "932a88149f375dd492d30b8840f67db36d773fdb",
-      "body_len": 33205
+      "body_sha1": "d4657cd66d74e9444317c470938528c63f4f38e7",
+      "body_len": 33976
     },
     {
       "method": "GET",
@@ -377,6 +377,7 @@
           "channel",
           "cooldown",
           "cosyvoice_path",
+          "cosyvoice_warmup",
           "default_voice",
           "disabled_voices",
           "emotes",
@@ -509,12 +510,6 @@
             "name": "карина1",
             "kind": "rvc",
             "engine": "rvc"
-          },
-          {
-            "id": "c:v1794527589_8ac8c5",
-            "name": "кошка",
-            "kind": "custom",
-            "engine": "xtts"
           },
           {
             "id": "c:v1794523038_300087",
@@ -768,12 +763,6 @@
             "engine": "rvc"
           },
           {
-            "id": "c:v1794527589_8ac8c5",
-            "name": "кошка",
-            "kind": "custom",
-            "engine": "xtts"
-          },
-          {
             "id": "c:v1794523038_300087",
             "name": "Потюня",
             "kind": "custom",
@@ -949,6 +938,7 @@
           "channel",
           "cooldown",
           "cosyvoice_path",
+          "cosyvoice_warmup",
           "default_voice",
           "disabled_voices",
           "emotes",

@@ -26,7 +26,7 @@
       <div>
         <h2>Движки озвучки <span class="badge accent">CosyVoice 3</span></h2>
         <span class="sub">CosyVoice 3 переносит интонацию и тембр записи, XTTS быстрее, но перерисовывает мелодию.
-          Модель грузится лениво: пока CosyVoice не используется, видеопамять свободна.</span>
+          По умолчанию модель грузится сразу при старте программы - первая реплика не ждёт загрузки (около 20 с).</span>
       </div>
     </div>
     <div class="row wrap">
@@ -34,6 +34,8 @@
       <input type="text" id="cvPath" placeholder="папка CosyVoice 3, например C:\CosyVoice (путь без кириллицы)">
       <button class="btn fit" id="cvBtn">Подключить</button>
     </div>
+    <label class="check"><input type="checkbox" id="cvWarm"> Грузить CosyVoice 3 сразу при старте программы
+      (иначе модель поднимается лениво, и первая реплика ждёт её загрузки)</label>
     <div class="err" id="cvErr"></div>
   </section>
 
@@ -313,6 +315,18 @@ function baseOptions(sel, current) {
 }
 
 // ---------- CosyVoice 3 ----------
+function renderWarmup() {
+  const box = $('cvWarm');
+  if (!box || !settings) return;
+  const want = settings.cosyvoice_warmup !== false;
+  if (box.checked !== want) box.checked = want;
+}
+$('cvWarm').onchange = async () => {
+  try {
+    const r = await api('/api/settings', {cosyvoice_warmup: $('cvWarm').checked});
+    if (r && r.ok) { settings = r.settings; renderWarmup(); }
+  } catch (e) {}
+};
 $('cvBtn').onclick = async () => {
   $('cvErr').textContent = '';
   $('cvBtn').disabled = true;
@@ -644,7 +658,7 @@ async function load() {
   const r = await api('/api/state');
   voices = r.voices; engine = r.status.engine; rvc = r.status.rvc;
   settings = r.settings || {};
-  cosyvoice = r.status.cosyvoice || {}; render();
+  cosyvoice = r.status.cosyvoice || {}; render(); renderWarmup();
 }
 
 load();
@@ -652,7 +666,7 @@ const es = new EventSource('/events');
 es.onmessage = m => { const ev = JSON.parse(m.data);
   if (ev.type === 'voices') load();
   else if (ev.type === 'status') { engine = ev.engine; rvc = ev.rvc; cosyvoice = ev.cosyvoice || cosyvoice; renderPills(); }
-  else if (ev.type === 'settings') { settings = ev.settings || {}; renderMute(settings.muted); }
+  else if (ev.type === 'settings') { settings = ev.settings || {}; renderMute(settings.muted); renderWarmup(); }
 };
 </script>
 </body>
