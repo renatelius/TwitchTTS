@@ -1,0 +1,1012 @@
+{
+  "routes": [
+    {
+      "path": "/",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "handler": "page_root"
+    },
+    {
+      "path": "/chat",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "handler": "page_index"
+    },
+    {
+      "path": "/voices",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "handler": "page_voices"
+    },
+    {
+      "path": "/overlay",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "handler": "page_overlay"
+    },
+    {
+      "path": "/poll",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "handler": "page_poll"
+    },
+    {
+      "path": "/player",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "handler": "page_player"
+    },
+    {
+      "path": "/brb",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "handler": "page_brb"
+    },
+    {
+      "path": "/events",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "handler": "events"
+    },
+    {
+      "path": "/api/state",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "handler": "api_state"
+    },
+    {
+      "path": "/api/settings",
+      "methods": [
+        "POST"
+      ],
+      "handler": "api_settings"
+    },
+    {
+      "path": "/api/connect",
+      "methods": [
+        "POST"
+      ],
+      "handler": "api_connect"
+    },
+    {
+      "path": "/api/disconnect",
+      "methods": [
+        "POST"
+      ],
+      "handler": "api_disconnect"
+    },
+    {
+      "path": "/api/control/{action}",
+      "methods": [
+        "POST"
+      ],
+      "handler": "api_control"
+    },
+    {
+      "path": "/api/say",
+      "methods": [
+        "POST"
+      ],
+      "handler": "api_say"
+    },
+    {
+      "path": "/api/preview",
+      "methods": [
+        "POST"
+      ],
+      "handler": "api_preview"
+    },
+    {
+      "path": "/api/announce",
+      "methods": [
+        "POST"
+      ],
+      "handler": "api_announce"
+    },
+    {
+      "path": "/api/brb",
+      "methods": [
+        "GET",
+        "HEAD",
+        "POST"
+      ],
+      "handler": "api_brb"
+    },
+    {
+      "path": "/api/emotes",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "handler": "api_emotes"
+    },
+    {
+      "path": "/api/emotes/reset",
+      "methods": [
+        "POST"
+      ],
+      "handler": "api_emotes_reset"
+    },
+    {
+      "path": "/api/voices",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "handler": "api_voices"
+    },
+    {
+      "path": "/api/voices",
+      "methods": [
+        "POST"
+      ],
+      "handler": "api_voice_create"
+    },
+    {
+      "path": "/api/voices/toggle",
+      "methods": [
+        "POST"
+      ],
+      "handler": "api_voice_toggle"
+    },
+    {
+      "path": "/api/rvc/setup",
+      "methods": [
+        "POST"
+      ],
+      "handler": "api_rvc_setup"
+    },
+    {
+      "path": "/api/cosyvoice/setup",
+      "methods": [
+        "POST"
+      ],
+      "handler": "api_cosyvoice_setup"
+    },
+    {
+      "path": "/api/voice/engine",
+      "methods": [
+        "POST"
+      ],
+      "handler": "api_voice_engine"
+    },
+    {
+      "path": "/api/voice/cosyvoice",
+      "methods": [
+        "POST"
+      ],
+      "handler": "api_voice_cosyvoice"
+    },
+    {
+      "path": "/api/voice/transcript",
+      "methods": [
+        "POST"
+      ],
+      "handler": "api_voice_transcript"
+    },
+    {
+      "path": "/api/rvc/update",
+      "methods": [
+        "POST"
+      ],
+      "handler": "api_rvc_update"
+    },
+    {
+      "path": "/api/rvc/train",
+      "methods": [
+        "POST"
+      ],
+      "handler": "api_rvc_train"
+    },
+    {
+      "path": "/api/rvc/train/status",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "handler": "api_rvc_train_status"
+    },
+    {
+      "path": "/api/rvc/train/cancel",
+      "methods": [
+        "POST"
+      ],
+      "handler": "api_rvc_train_cancel"
+    },
+    {
+      "path": "/api/voices/{voice_id:path}",
+      "methods": [
+        "DELETE"
+      ],
+      "handler": "api_voice_delete"
+    },
+    {
+      "path": "/api/voice/pitch",
+      "methods": [
+        "POST"
+      ],
+      "handler": "api_voice_pitch"
+    },
+    {
+      "path": "/api/voice/volume",
+      "methods": [
+        "POST"
+      ],
+      "handler": "api_voice_volume"
+    },
+    {
+      "path": "/api/voice/calibrate",
+      "methods": [
+        "POST"
+      ],
+      "handler": "api_voice_calibrate"
+    },
+    {
+      "path": "/audio/{name}",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "handler": "audio"
+    },
+    {
+      "path": "/static",
+      "methods": [],
+      "handler": "Mount"
+    }
+  ],
+  "http": [
+    {
+      "method": "GET",
+      "path": "/",
+      "status": 200,
+      "content_type": "text/html",
+      "body_sha1": "a6af6736ef3f1a5eca12ad6de4a1d035342f2601",
+      "body_len": 103535
+    },
+    {
+      "method": "GET",
+      "path": "/poll",
+      "status": 200,
+      "content_type": "text/html",
+      "body_sha1": "a6af6736ef3f1a5eca12ad6de4a1d035342f2601",
+      "body_len": 103535
+    },
+    {
+      "method": "GET",
+      "path": "/chat",
+      "status": 200,
+      "content_type": "text/html",
+      "body_sha1": "bdc6c2ec2e2a61a542a618ebd97b901aa6a5bc44",
+      "body_len": 31987
+    },
+    {
+      "method": "GET",
+      "path": "/voices",
+      "status": 200,
+      "content_type": "text/html",
+      "body_sha1": "c2f87753ade40d7e733b883c0514dbc4617fee5d",
+      "body_len": 30019
+    },
+    {
+      "method": "GET",
+      "path": "/overlay",
+      "status": 200,
+      "content_type": "text/html",
+      "body_sha1": "57b6976b68a14ec5c70546e276dd329b11dbb0c3",
+      "body_len": 3806
+    },
+    {
+      "method": "GET",
+      "path": "/player",
+      "status": 200,
+      "content_type": "text/html",
+      "body_sha1": "373a3f674fc499b5c3e4bae9f4275fa170ee8d65",
+      "body_len": 4144
+    },
+    {
+      "method": "GET",
+      "path": "/brb",
+      "status": 200,
+      "content_type": "text/html",
+      "body_sha1": "2aabd2d8fc417d11e83712f1b104bf2bce48776b",
+      "body_len": 2844
+    },
+    {
+      "method": "GET",
+      "path": "/static/style.css",
+      "status": 200,
+      "content_type": "text/css",
+      "body_sha1": "70eac38bd3f4525ed3438c62e0eaa7b5c7ce0d7f",
+      "body_len": 28479
+    },
+    {
+      "method": "GET",
+      "path": "/api/state",
+      "status": 200,
+      "content_type": "application/json",
+      "json": {
+        "ok": true,
+        "status": {
+          "type": "status",
+          "engine": {
+            "error": false
+          },
+          "rvc": {
+            "error": false
+          },
+          "cosyvoice": {
+            "error": false
+          },
+          "train": {
+            "error": false
+          },
+          "twitch": {
+            "error": false
+          },
+          "queue": 0,
+          "paused": false,
+          "now": null
+        },
+        "settings": {
+          "audience": "all",
+          "autoconnect": true,
+          "brb_message": "Скоро вернусь",
+          "brb_seconds": 0,
+          "channel": "real_nutt",
+          "cooldown": 0,
+          "default_voice": "c:v1794589589_bd031b",
+          "emotes": true,
+          "fix_layout": false,
+          "follow_rule": "ignore",
+          "highlight_reward": "",
+          "highlight_rewards": false,
+          "language": "auto",
+          "max_len": 500,
+          "max_queue": 15,
+          "me_voice": "",
+          "muted": false,
+          "player_only": false,
+          "random_voice": false,
+          "read_names": false,
+          "skip_commands": true,
+          "skip_digits": true,
+          "skip_rewards": true,
+          "speak_reward": "",
+          "speed": 1.0,
+          "style": "",
+          "tts_prefix": "",
+          "volume": 0.35
+        },
+        "voices": [
+          {
+            "id": "c:v1794519480_527499",
+            "name": "Renat",
+            "kind": "custom",
+            "engine": "xtts"
+          },
+          {
+            "id": "c:v1794526570_4ee810",
+            "name": "алладин",
+            "kind": "custom",
+            "engine": "xtts"
+          },
+          {
+            "id": "c:v1794679945_833e66",
+            "name": "артём",
+            "kind": "custom",
+            "engine": "xtts"
+          },
+          {
+            "id": "c:r1794682421_e6db4a",
+            "name": "артём1",
+            "kind": "rvc",
+            "engine": "rvc"
+          },
+          {
+            "id": "c:v1794525011_2862dd",
+            "name": "бибизян",
+            "kind": "custom",
+            "engine": "cosy"
+          },
+          {
+            "id": "c:v1794521941_e721cf",
+            "name": "Дана",
+            "kind": "custom",
+            "engine": "xtts"
+          },
+          {
+            "id": "c:r1794532768_ac5254",
+            "name": "Дана1",
+            "kind": "rvc",
+            "engine": "rvc"
+          },
+          {
+            "id": "c:v1794606291_ea94d1",
+            "name": "дудя",
+            "kind": "custom",
+            "engine": "xtts"
+          },
+          {
+            "id": "c:r1794607281_bda144",
+            "name": "дудя1",
+            "kind": "rvc",
+            "engine": "rvc"
+          },
+          {
+            "id": "c:v1794589589_bd031b",
+            "name": "женя",
+            "kind": "custom",
+            "engine": "cosy"
+          },
+          {
+            "id": "c:r1794590557_c15b9c",
+            "name": "женя1",
+            "kind": "rvc",
+            "engine": "rvc"
+          },
+          {
+            "id": "c:v1794660041_3e9631",
+            "name": "жоня",
+            "kind": "custom",
+            "engine": "cosy"
+          },
+          {
+            "id": "c:r1794662467_62231a",
+            "name": "жоня1",
+            "kind": "rvc",
+            "engine": "rvc"
+          },
+          {
+            "id": "c:v1794525168_7e8850",
+            "name": "иля",
+            "kind": "custom",
+            "engine": "cosy"
+          },
+          {
+            "id": "c:r1794681130_09dbd0",
+            "name": "иля1",
+            "kind": "rvc",
+            "engine": "rvc"
+          },
+          {
+            "id": "c:v1794668514_cc72da",
+            "name": "карина",
+            "kind": "custom",
+            "engine": "xtts"
+          },
+          {
+            "id": "c:r1794669560_1fa903",
+            "name": "карина1",
+            "kind": "rvc",
+            "engine": "rvc"
+          },
+          {
+            "id": "c:v1794527589_8ac8c5",
+            "name": "кошка",
+            "kind": "custom",
+            "engine": "xtts"
+          },
+          {
+            "id": "c:v1794523038_300087",
+            "name": "Потюня",
+            "kind": "custom",
+            "engine": "xtts"
+          },
+          {
+            "id": "c:r1794592323_9e779d",
+            "name": "потюня1",
+            "kind": "rvc",
+            "engine": "rvc"
+          },
+          {
+            "id": "c:v1794525151_48209b",
+            "name": "потюня2",
+            "kind": "custom",
+            "engine": "xtts"
+          },
+          {
+            "id": "c:v1794602196_06a8dd",
+            "name": "сальто",
+            "kind": "custom",
+            "engine": "xtts"
+          },
+          {
+            "id": "c:r1794603740_4acee6",
+            "name": "сальто1",
+            "kind": "rvc",
+            "engine": "rvc"
+          },
+          {
+            "id": "c:v1794525615_81a783",
+            "name": "флекс",
+            "kind": "custom",
+            "engine": "xtts"
+          },
+          {
+            "id": "c:v1794524633_9a0929",
+            "name": "Флексдум",
+            "kind": "custom",
+            "engine": "xtts"
+          },
+          {
+            "id": "c:r1794534145_d97754",
+            "name": "Флексдум1",
+            "kind": "rvc",
+            "engine": "rvc"
+          },
+          {
+            "id": "c:v1794660718_9f976c",
+            "name": "шлепич",
+            "kind": "custom",
+            "engine": "cosy"
+          },
+          {
+            "id": "c:r1794663972_6590c9",
+            "name": "шлепич1",
+            "kind": "rvc",
+            "engine": "rvc"
+          }
+        ],
+        "brb": {
+          "active": false,
+          "message": "Скоро вернусь"
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/emotes",
+      "status": 200,
+      "content_type": "application/json",
+      "json": {
+        "ok": true,
+        "enabled": true,
+        "folder": "sounds",
+        "emotes": {
+          "laugh": {
+            "title": "смех",
+            "files": 46,
+            "cosy": true
+          },
+          "sigh": {
+            "title": "вздох",
+            "files": 46,
+            "cosy": true
+          },
+          "breath": {
+            "title": "вдох",
+            "files": 40,
+            "cosy": true
+          },
+          "cough": {
+            "title": "кашель",
+            "files": 46,
+            "cosy": true
+          },
+          "hmm": {
+            "title": "хм",
+            "files": 46,
+            "cosy": true
+          },
+          "tsk": {
+            "title": "цоканье",
+            "files": 38,
+            "cosy": true
+          },
+          "smack": {
+            "title": "чмок",
+            "files": 40,
+            "cosy": true
+          },
+          "hiss": {
+            "title": "шипение",
+            "files": 44,
+            "cosy": true
+          },
+          "cry": {
+            "title": "плач",
+            "files": 52,
+            "cosy": false
+          },
+          "scream": {
+            "title": "крик",
+            "files": 18,
+            "cosy": false
+          },
+          "yawn": {
+            "title": "зевок",
+            "files": 52,
+            "cosy": false
+          },
+          "gasp": {
+            "title": "ах",
+            "files": 50,
+            "cosy": false
+          }
+        },
+        "generated": {}
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/voices",
+      "status": 200,
+      "content_type": "application/json",
+      "json": {
+        "ok": true,
+        "voices": [
+          {
+            "id": "c:v1794519480_527499",
+            "name": "Renat",
+            "kind": "custom",
+            "engine": "xtts"
+          },
+          {
+            "id": "c:v1794526570_4ee810",
+            "name": "алладин",
+            "kind": "custom",
+            "engine": "xtts"
+          },
+          {
+            "id": "c:v1794679945_833e66",
+            "name": "артём",
+            "kind": "custom",
+            "engine": "xtts"
+          },
+          {
+            "id": "c:r1794682421_e6db4a",
+            "name": "артём1",
+            "kind": "rvc",
+            "engine": "rvc"
+          },
+          {
+            "id": "c:v1794525011_2862dd",
+            "name": "бибизян",
+            "kind": "custom",
+            "engine": "cosy"
+          },
+          {
+            "id": "c:v1794521941_e721cf",
+            "name": "Дана",
+            "kind": "custom",
+            "engine": "xtts"
+          },
+          {
+            "id": "c:r1794532768_ac5254",
+            "name": "Дана1",
+            "kind": "rvc",
+            "engine": "rvc"
+          },
+          {
+            "id": "c:v1794606291_ea94d1",
+            "name": "дудя",
+            "kind": "custom",
+            "engine": "xtts"
+          },
+          {
+            "id": "c:r1794607281_bda144",
+            "name": "дудя1",
+            "kind": "rvc",
+            "engine": "rvc"
+          },
+          {
+            "id": "c:v1794589589_bd031b",
+            "name": "женя",
+            "kind": "custom",
+            "engine": "cosy"
+          },
+          {
+            "id": "c:r1794590557_c15b9c",
+            "name": "женя1",
+            "kind": "rvc",
+            "engine": "rvc"
+          },
+          {
+            "id": "c:v1794660041_3e9631",
+            "name": "жоня",
+            "kind": "custom",
+            "engine": "cosy"
+          },
+          {
+            "id": "c:r1794662467_62231a",
+            "name": "жоня1",
+            "kind": "rvc",
+            "engine": "rvc"
+          },
+          {
+            "id": "c:v1794525168_7e8850",
+            "name": "иля",
+            "kind": "custom",
+            "engine": "cosy"
+          },
+          {
+            "id": "c:r1794681130_09dbd0",
+            "name": "иля1",
+            "kind": "rvc",
+            "engine": "rvc"
+          },
+          {
+            "id": "c:v1794668514_cc72da",
+            "name": "карина",
+            "kind": "custom",
+            "engine": "xtts"
+          },
+          {
+            "id": "c:r1794669560_1fa903",
+            "name": "карина1",
+            "kind": "rvc",
+            "engine": "rvc"
+          },
+          {
+            "id": "c:v1794527589_8ac8c5",
+            "name": "кошка",
+            "kind": "custom",
+            "engine": "xtts"
+          },
+          {
+            "id": "c:v1794523038_300087",
+            "name": "Потюня",
+            "kind": "custom",
+            "engine": "xtts"
+          },
+          {
+            "id": "c:r1794592323_9e779d",
+            "name": "потюня1",
+            "kind": "rvc",
+            "engine": "rvc"
+          },
+          {
+            "id": "c:v1794525151_48209b",
+            "name": "потюня2",
+            "kind": "custom",
+            "engine": "xtts"
+          },
+          {
+            "id": "c:v1794602196_06a8dd",
+            "name": "сальто",
+            "kind": "custom",
+            "engine": "xtts"
+          },
+          {
+            "id": "c:r1794603740_4acee6",
+            "name": "сальто1",
+            "kind": "rvc",
+            "engine": "rvc"
+          },
+          {
+            "id": "c:v1794525615_81a783",
+            "name": "флекс",
+            "kind": "custom",
+            "engine": "xtts"
+          },
+          {
+            "id": "c:v1794524633_9a0929",
+            "name": "Флексдум",
+            "kind": "custom",
+            "engine": "xtts"
+          },
+          {
+            "id": "c:r1794534145_d97754",
+            "name": "Флексдум1",
+            "kind": "rvc",
+            "engine": "rvc"
+          },
+          {
+            "id": "c:v1794660718_9f976c",
+            "name": "шлепич",
+            "kind": "custom",
+            "engine": "cosy"
+          },
+          {
+            "id": "c:r1794663972_6590c9",
+            "name": "шлепич1",
+            "kind": "rvc",
+            "engine": "rvc"
+          }
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/brb",
+      "status": 200,
+      "content_type": "application/json",
+      "json": {
+        "ok": true,
+        "brb": {
+          "active": false,
+          "message": "Скоро вернусь"
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/rvc/train/status",
+      "status": 200,
+      "content_type": "application/json",
+      "json": {
+        "ok": true,
+        "train": {
+          "state": "idle",
+          "stage": "",
+          "stage_text": "",
+          "detail": "",
+          "error": "",
+          "voice_name": "",
+          "epochs_total": 0,
+          "epoch": 0,
+          "step": 0,
+          "batch": 0,
+          "batch_total": 0,
+          "dataset_seconds": 0.0,
+          "aliases": []
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/audio/nope.wav",
+      "status": 404,
+      "content_type": "application/json",
+      "json": {
+        "ok": false,
+        "error": "нет файла"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/nope",
+      "status": 404,
+      "content_type": "text/plain",
+      "body_sha1": "d205cbd6783332a212c5ae92d73c77178c2d2f28",
+      "body_len": 9
+    },
+    {
+      "method": "POST",
+      "path": "/api/say",
+      "status": 400,
+      "content_type": "application/json",
+      "json": {
+        "ok": false,
+        "error": "Введите текст"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/preview",
+      "status": 404,
+      "content_type": "application/json",
+      "json": {
+        "ok": false,
+        "error": "Голос не найден"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/announce",
+      "status": 400,
+      "content_type": "application/json",
+      "json": {
+        "ok": false,
+        "error": "Пустой текст"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/control/unknown",
+      "status": 404,
+      "content_type": "application/json",
+      "json": {
+        "ok": false,
+        "error": "неизвестная команда"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/settings",
+      "status": 200,
+      "content_type": "application/json",
+      "json": {
+        "ok": true,
+        "settings": {
+          "audience": "all",
+          "autoconnect": true,
+          "brb_message": "Скоро вернусь",
+          "brb_seconds": 0,
+          "channel": "real_nutt",
+          "cooldown": 0,
+          "default_voice": "c:v1794589589_bd031b",
+          "emotes": true,
+          "fix_layout": false,
+          "follow_rule": "ignore",
+          "highlight_reward": "",
+          "highlight_rewards": false,
+          "language": "auto",
+          "max_len": 500,
+          "max_queue": 15,
+          "me_voice": "",
+          "muted": false,
+          "player_only": false,
+          "random_voice": false,
+          "read_names": false,
+          "skip_commands": true,
+          "skip_digits": true,
+          "skip_rewards": true,
+          "speak_reward": "",
+          "speed": 1.0,
+          "style": "",
+          "tts_prefix": "",
+          "volume": 0.35
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/emotes/reset",
+      "status": 200,
+      "content_type": "application/json",
+      "json": {
+        "ok": true,
+        "generated": {}
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/voice/engine",
+      "status": 400,
+      "content_type": "application/json",
+      "json": {
+        "ok": false,
+        "error": "Движок переключается только у своих голосов."
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/voice/transcript",
+      "status": 400,
+      "content_type": "application/json",
+      "json": {
+        "ok": false,
+        "error": "Текст образца задаётся только для своих голосов."
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/rvc/update",
+      "status": 400,
+      "content_type": "application/json",
+      "json": {
+        "ok": false,
+        "error": "RVC-голос не найден."
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/voices/toggle",
+      "status": 200,
+      "content_type": "application/json",
+      "json": {
+        "ok": true
+      }
+    }
+  ]
+}
