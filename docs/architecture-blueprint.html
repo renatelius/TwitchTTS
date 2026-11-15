@@ -64,15 +64,17 @@
       <div class="kv"><span>Шаг E — цикл импортов</span><b>bfcfbc1</b></div>
       <div class="kv"><span>Шаг F — очередь озвучки</span><b>551413a</b></div>
       <div class="kv"><span>Шаг G — синтез</span><b>ef2a9c7</b></div>
+      <div class="kv"><span>Шаг H — скорость</span><b>1ff6fe3</b></div>
+      <div class="kv"><span>ADR 0004 — точность движков</span><b>3c03f17</b></div>
       <div class="kv"><span>Документация и ADR</span><b>8cdfc2c</b></div>
       <div class="kv"><span>Тест: мигающий аудит</span><b>dc145cd</b></div>
     </div>
     <div class="card"><h4>Масштаб</h4>
       <div class="kv"><span>main.py было → стало</span><b>1730 → 661</b></div>
       <div class="kv"><span>app/api.py</span><b>631 строка</b></div>
-      <div class="kv"><span>app/speak_queue.py</span><b>132 строки</b></div>
-      <div class="kv"><span>app/synthesis.py</span><b>329 строк</b></div>
-      <div class="kv"><span>app/settings.py</span><b>настройки</b></div>
+      <div class="kv"><span>app/speak_queue.py</span><b>221 строка</b></div>
+      <div class="kv"><span>app/synthesis.py</span><b>328 строк</b></div>
+      <div class="kv"><span>app/settings.py</span><b>133 строки</b></div>
       <div class="kv"><span>app/chat_rules.py</span><b>229 строк</b></div>
     </div>
     <div class="card"><h4>Страховка</h4>
@@ -80,7 +82,8 @@
       <div class="kv"><span>Слепок HTTP</span><b>37 маршрутов / 25 запросов</b></div>
       <div class="kv"><span>Слепок настроек</span><b>26 случаев</b></div>
       <div class="kv"><span>Слепок очереди</span><b>7 шагов</b></div>
-      <div class="kv"><span>Наборов тестов</span><b>17 · провалов 0</b></div>
+      <div class="kv"><span>Наборов тестов</span><b>18 · провалов 0</b></div>
+      <div class="kv"><span>Цикл очереди (A/B)</span><b>8.42 → 4.64 с</b></div>
     </div>
   </div>
 
@@ -99,7 +102,7 @@
     <h4>Сейчас</h4>
     <pre class="mermaid">
 graph TD
-  UI["Браузер / OBS"] --> API["app/api.py<br/>633 строки - роуты, SSE"]
+  UI["Браузер / OBS"] --> API["app/api.py<br/>631 строки - роуты, SSE"]
   API --> APP["app/main.py<br/>661 строк - состояние"]
   APP --> Q["app/speak_queue.py<br/>очередь, skip, clear"]
   APP --> SY2["app/synthesis.py<br/>синтез реплики"]
@@ -167,12 +170,12 @@ graph LR
   <pre>app/
   main.py         661  состояние, Twitch API, сборка приложения
   api.py          631  HTTP: страницы, /api/*, SSE /events, отдача /audio      [новый]
-  speak_queue.py 132  очередь озвучки: порядок, пауза, очистка, пропуск       [новый]
-  synthesis.py   329  синтез реплики: XTTS, RVC, CosyVoice, эмоции, стили    [новый]
-  settings.py     120  настройки: defaults, загрузка, нормализация            [новый]
-  emote_text.py   190  разбор ремарок и вокализация (текст, без звука)        [новый]
-  textkeys.py      8  сравнение имён: norm_key                              [новый]
-  chat_rules.py   230  чистые правила чата: decide(msg, ctx) -> Decision       [новый]
+  speak_queue.py 221  очередь озвучки: порядок, пауза, очистка, пропуск, предгенерация  [новый]
+  synthesis.py   328  синтез реплики: XTTS, RVC, CosyVoice, эмоции, стили    [новый]
+  settings.py     133  настройки: defaults, загрузка, нормализация, маска секретов  [новый]
+  emote_text.py   163  разбор ремарок и вокализация (текст, без звука)        [новый]
+  textkeys.py      12  сравнение имён: norm_key                              [новый]
+  chat_rules.py   229  чистые правила чата: decide(msg, ctx) -> Decision       [новый]
   paths.py         12  общие пути: DATA, CACHE, TMP, WEB                      [новый]
   engine.py       437  XTTS v2: загрузка, слепки голоса, синтез
   voices.py       590  голоса: клипы, слепки, метаданные, копирование тона
@@ -203,7 +206,7 @@ graph LR
     <div class="card"><h4>Тяжёлые места</h4>
       <table>
         <tr><th>Функция</th><th>Строк</th><th>Назначение</th></tr>
-        <tr><td><code>_synth</code></td><td class="num">73</td><td>синтез: чистка → движок → wav</td></tr>
+        <tr><td><code>Synthesizer.synthesize</code></td><td class="num">73</td><td>синтез: чистка → движок → wav (в <code>app/synthesis.py</code>)</td></tr>
         <tr><td><code>run_command</code></td><td class="num">61</td><td>исполнение команды чата</td></tr>
         <tr><td><code>on_chat</code></td><td class="num">59</td><td>приём сообщения, решение</td></tr>
         <tr><td><code>_render_cosy</code></td><td class="num">57</td><td>рендер CosyVoice</td></tr>
@@ -268,15 +271,28 @@ docs/               архитектура, контекст, ADR</pre>
       <p style="color:var(--dim);margin-bottom:0">Причина долгого ответа найдена: воркер ждёт конца звучания текущего
       сообщения и только потом берёт следующее. Ускорение — не в модулях, а в конвейере.</p>
     </div>
-    <div class="card"><h4>Рычаги (отдельный этап, каждый с замерами)</h4>
+    <div class="card"><h4>Рычаги (каждый — отдельный этап с замерами)</h4>
       <ul>
-        <li><b>Предгенерация</b> следующего сообщения во время звучания текущего — снимает время прослушивания с критического пути (ожидаемо ×2 по задержке).</li>
-        <li><b>fp16 для XTTS</b> — быстрее и вдвое легче по VRAM, <span class="tag t-warn">только после слепого A/B</span>.</li>
+        <li><b>Предгенерация</b> следующего сообщения во время звучания текущего — снимает время прослушивания с критического пути. <span class="tag t-ok">сделано</span> <span class="num">1ff6fe3</span>: цикл очереди 8.42 → 4.64 с (×1.8).</li>
+        <li><b>fp16 / TF32 / квантизация</b> — <span class="tag t-bad">запрещены</span>: точность вычислений движков не снижаем (ADR 0004, <span class="num">3c03f17</span>).</li>
         <li><b>Пакетный синтез</b> длинных фраз (разбиение на предложения уже есть).</li>
         <li><b>Выгрузка RVC/CosyVoice</b> из VRAM, когда они не обучаются.</li>
         <li><b>Устранение цикла textproc ↔ emotes</b> и лишних копий аудио.</li>
       </ul>
     </div>
+  </div>
+  <div class="card">
+    <h4>Замер шага H: A/B на одном прогретом сервере (RTX 5070)</h4>
+    <table>
+      <tr><th>Раунд</th><th>До предгенерации</th><th>После</th></tr>
+      <tr><td>Раунд 1 (4 цикла)</td><td class="num">8.22 с</td><td class="num">4.42 с</td></tr>
+      <tr><td>Раунд 2 (4 цикла)</td><td class="num">8.62 с</td><td class="num">4.85 с</td></tr>
+      <tr><td>Среднее</td><td class="num">8.42 с</td><td class="num">4.64 с</td></tr>
+    </table>
+    <p style="color:var(--dim);margin-bottom:0">Цикл очереди — от начала озвучки одной реплики до начала следующей;
+    ускорение примерно ×1.8. Файлы замеров — <code>data/bench/</code>, инструмент —
+    <code>tools/bench_queue.py</code>. Точность вычислений движков не менялась (ADR 0004),
+    поэтому качество не должно отличаться — подтверждает слепое прослушивание.</p>
   </div>
   <div class="card">
     <h4>Правило качества</h4>
@@ -289,8 +305,7 @@ docs/               архитектура, контекст, ADR</pre>
   <h2>8. Безопасность и данные</h2>
   <div class="card">
     <ul style="margin:0">
-      <li><span class="tag t-bad">находка</span> <code>twitch_token</code> и <code>twitch_client_id</code> отдаются в <code>/api/state</code> и в SSE-событии <code>settings</code>.
-      CORS разрешает origin <code>null</code> (страница с диска), значит любой открытый локальный HTML может прочитать токен. <b>Нужен ваш выбор</b>: маскировать секрет в ответах (контракт меняется) или оставить.</li>
+      <li><span class="tag t-ok">исправлено</span> <code>twitch_token</code> и <code>twitch_client_id</code> больше не отдаются открытым текстом: в <code>/api/state</code> и в SSE-событии <code>settings</code> секрет замаскирован (<code>********</code>), пустое значение остаётся пустым. CORS разрешает origin <code>null</code> (страница с диска), поэтому маскировка обязательна. Решение пользователя — <span class="num">853f061</span>.</li>
       <li><span class="tag t-ok">в порядке</span> загрузки ограничены 500 МБ и 40 файлами, путь к wav проверяется на <code>/</code> и <code>\</code>, приватные пути и CORS ограничены localhost.</li>
       <li><span class="tag t-ok">в порядке</span> пользовательские данные (голоса, слепки, записи, настройки) при разбиении не переносятся и не переписываются.</li>
     </ul>
@@ -305,7 +320,7 @@ docs/               архитектура, контекст, ADR</pre>
     <tr><td>E</td><td>Разрыв цикла <code>textproc ↔ emotes</code></td><td><code>emote_text</code>, <code>textkeys</code></td><td>граф импортов + живой чат</td><td><span class="tag t-ok">готово</span></td></tr>
     <tr><td>F</td><td>Очередь → <code>app/speak_queue.py</code></td><td><code>SpeakQueue: synthesize/broadcast/is_ready</code></td><td>слепок очереди + тесты очереди</td><td><span class="tag t-ok">готово</span></td></tr>
     <tr><td>G</td><td>Синтез → <code>app/synthesis.py</code></td><td><code>synthesize(job)</code></td><td>контроль качества A/B</td><td><span class="tag t-ok">готово</span></td></tr>
-    <tr><td>H</td><td>Производительность и GPU</td><td>—</td><td>baseline до/после, VRAM, качество</td><td><span class="tag t-acc">отдельный этап</span></td></tr>
+    <tr><td>H</td><td>Скорость: предгенерация следующей реплики</td><td><code>_maybe_prefetch</code></td><td>A/B замер цикла + слепое прослушивание</td><td><span class="tag t-ok">готово</span> <span class="num">1ff6fe3</span></td></tr>
   </table>
   <p style="color:var(--dim)">Каждый шаг — отдельный коммит, поведение не меняется, тесты и слепки обязательны.</p>
 
@@ -314,7 +329,7 @@ docs/               архитектура, контекст, ADR</pre>
     <ul style="margin:0">
       <li>Функциональность, API-контракты и настройки совместимы с текущей версией.</li>
       <li>Нет циклических импортов, глобального состояния и дублирования путей.</li>
-      <li>15 наборов тестов + 3 золотых слепка зелёные на каждом шаге.</li>
+      <li>18 наборов тестов + 4 золотых слепка зелёные на каждом шаге.</li>
       <li>Качество голоса подтверждено контрольным набором (до/после).</li>
       <li>Скорость и VRAM измерены до и после — без ухудшения качества.</li>
       <li>Документация соответствует коду; на каждое существенное решение — ADR.</li>

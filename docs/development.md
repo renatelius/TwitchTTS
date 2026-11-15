@@ -34,6 +34,7 @@ venv\Scripts\python.exe tools\test_api.py            # маршруты и св�
 venv\Scripts\python.exe tools\test_imports.py        # циклы импортов и неопределённые имена
 venv\Scripts\python.exe tools\test_queue.py           # очередь озвучки (без сервера)
 venv\Scripts\python.exe tools\test_synthesis.py       # модуль синтеза (без моделей)
+venv\Scripts\python.exe tools\bench_queue.py         # замер цикла очереди (нужен сервер)
 venv\Scripts\python.exe tools\test_emotes.py         # эмоции и разбор текста
 venv\Scripts\python.exe tools\test_langs.py          # языки
 venv\Scripts\python.exe tools\audit_emotes.py        # сквозная проверка эмоций (нужен сервер)
@@ -114,6 +115,19 @@ nvidia-smi --query-gpu=memory.used,utilization.gpu --format=csv
 Полезно снимать: время первой фразы (прогрев модели), время обычной фразы,
 пиковую VRAM, утилизацию GPU, время ожидания в очереди. Сравнивать только
 в одинаковых условиях.
+
+Цикл очереди — от начала озвучки одной реплики до начала следующей — и есть
+главная метрика задержки:
+
+```
+venv\Scripts\python.exe tools\bench_queue.py --count 4 --out data\bench\run.json
+```
+
+Сервер должен быть запущен (по умолчанию `http://127.0.0.1:8765`, другой
+адрес — переменной `TTS_BASE`). В JSON — длительность каждого цикла и
+среднее. Сравнивать только на прогретом сервере: первый цикл включает
+разогрев модели. После шага H (предгенерация) цикл сократился с 8.42 с
+до 4.64 с.
 
 ## Правила изменения кода
 
