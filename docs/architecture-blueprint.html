@@ -4,6 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>TwitchTTS — архитектура после рефакторинга</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <style>
+    .mermaid{background:#0b0e14;border:1px solid var(--line);border-radius:10px;padding:14px;overflow:auto}
+    .mermaid svg{max-width:100%;height:auto}
+  </style>
+
 <style>
   :root{
     --bg:#0e1117; --panel:#161b22; --panel2:#1c2230; --line:#2a3241;
@@ -54,17 +60,21 @@
     <div class="card"><h4>Сделано</h4>
       <div class="kv"><span>Шаг A — правила чата</span><b>9faa05f</b></div>
       <div class="kv"><span>Шаг B — HTTP-слой</span><b>4f89273</b></div>
+      <div class="kv"><span>Шаг D — настройки</span><b>1459ae8</b></div>
+      <div class="kv"><span>Документация и ADR</span><b>8cdfc2c</b></div>
       <div class="kv"><span>Тест: мигающий аудит</span><b>dc145cd</b></div>
     </div>
     <div class="card"><h4>Масштаб</h4>
-      <div class="kv"><span>main.py было → стало</span><b>1632 → 1016</b></div>
-      <div class="kv"><span>app/api.py</span><b>658 строк</b></div>
+      <div class="kv"><span>main.py было → стало</span><b>1730 → 960</b></div>
+      <div class="kv"><span>app/api.py</span><b>633 строки</b></div>
+      <div class="kv"><span>app/settings.py</span><b>настройки</b></div>
       <div class="kv"><span>app/chat_rules.py</span><b>230 строк</b></div>
     </div>
     <div class="card"><h4>Страховка</h4>
       <div class="kv"><span>Слепок чата</span><b>47/47</b></div>
       <div class="kv"><span>Слепок HTTP</span><b>37 маршрутов / 25 запросов</b></div>
-      <div class="kv"><span>Наборов тестов</span><b>13 · провалов 0</b></div>
+      <div class="kv"><span>Слепок настроек</span><b>26 случаев</b></div>
+      <div class="kv"><span>Наборов тестов</span><b>14 · провалов 0</b></div>
     </div>
   </div>
 
@@ -77,10 +87,79 @@
     Поведение продукта при разбиении не меняется — это проверяется золотыми слепками, а не на глаз.</p>
   </div>
 
-  <h2>2. Карта модулей сейчас</h2>
+  <h2>2. Карта: сейчас и после</h2>
+<div class="grid g2">
+  <div class="card">
+    <h4>Сейчас</h4>
+    <pre class="mermaid">
+graph TD
+  UI["Браузер / OBS"] --> API["app/api.py<br/>633 строки - роуты, SSE"]
+  API --> APP["app/main.py<br/>960 строк - состояние, очередь, синтез"]
+  APP --> CH["app/chat_rules.py<br/>решение: сказать / пропустить"]
+  APP --> ST["app/settings.py<br/>настройки"]
+  APP --> TW["Twitch API"]
+  APP --> SYN["Синтез XTTS / RVC / Cosy"]
+  APP --> VO["Голоса, загрузки, обучение RVC"]
+  classDef hot fill:#4c1d95,stroke:#a78bfa,color:#fff
+  class APP hot
+    </pre>
+  </div>
+  <div class="card">
+    <h4>После разбиения</h4>
+    <pre class="mermaid">
+graph TD
+  UI2["Браузер / OBS"] --> API2["app/api.py<br/>роуты"]
+  API2 --> APP2["app/application.py<br/>состояние и сборка"]
+  APP2 --> CH2["app/chat_rules.py<br/>решение: сказать / пропустить"]
+  APP2 --> ST2["app/settings.py<br/>настройки"]
+  APP2 --> TW2["app/twitch_api.py<br/>награды, фоллы, таймаут"]
+  APP2 --> QU["app/queue.py<br/>очередь, skip, clear"]
+  APP2 --> SY["app/synthesis.py<br/>синтез"]
+  SY --> ENG["engine / rvc / cosyvoice"]
+  classDef deep fill:#064e3b,stroke:#34d399,color:#fff
+  class CH2,SY,ST2,QU deep
+    </pre>
+  </div>
+</div>
+
+<h3>Поток одного сообщения</h3>
+<div class="card">
+  <pre class="mermaid">
+graph LR
+  M["сообщение Twitch"] --> C["chat_rules.decide"] --> Q["queue"] --> S["synthesis"] --> W["wav в data/cache"] --> E["SSE /events"] --> B["браузер / OBS"]
+  classDef done fill:#064e3b,stroke:#34d399,color:#fff
+  class C,ST done
+  </pre>
+</div>
+
+<h3>Конвейер сейчас и после предгенерации</h3>
+<div class="grid g2">
+  <div class="card">
+    <h4>Сейчас: ждём конца звука</h4>
+    <pre class="mermaid">
+graph LR
+  J1["задание 1"] --> G1["синтез 8 с"] --> P1["звучит 8 с"] --> J2["задание 2"] --> G2["синтез 8 с"]
+  classDef slow fill:#422006,stroke:#fcd34d,color:#fff
+  class G1,G2 slow
+    </pre>
+  </div>
+  <div class="card">
+    <h4>После: синтез заранее</h4>
+    <pre class="mermaid">
+graph LR
+  J1["задание 1"] --> G1["синтез 8 с"] --> P1["звучит 8 с"] --> P2["задание 2 уже готово"]
+  J2["задание 2"] --> G2["синтез 8 с"] --> P2
+  classDef fast fill:#064e3b,stroke:#34d399,color:#fff
+  class G2 fast
+    </pre>
+  </div>
+</div>
+
+<h2>3. Карта модулей сейчас</h2>
   <pre>app/
-  main.py        1016  состояние, очередь, синтез, Twitch API, сборка приложения
-  api.py          658  HTTP: страницы, /api/*, SSE /events, отдача /audio      [новый]
+  main.py         960  состояние, очередь, синтез, Twitch API, сборка приложения
+  api.py          633  HTTP: страницы, /api/*, SSE /events, отдача /audio      [новый]
+  settings.py     120  настройки: defaults, загрузка, нормализация            [новый]
   chat_rules.py   230  чистые правила чата: decide(msg, ctx) -> Decision       [новый]
   paths.py         12  общие пути: DATA, CACHE, TMP, WEB                      [новый]
   engine.py       437  XTTS v2: загрузка, слепки голоса, синтез
@@ -116,7 +195,7 @@
     </div>
   </div>
 
-  <h2>3. Целевая структура</h2>
+  <h2>4. Целевая структура</h2>
   <pre>app/
   main.py           точка входа: сборка приложения, CORS, запуск
   application.py    App: состояние, жизненный цикл, координация
@@ -134,7 +213,7 @@ docs/               архитектура, контекст, ADR</pre>
   <p style="color:var(--dim)">Ориентир, а не догма: пакеты <code>api/</code>, <code>core/</code>, <code>tts/</code> из ТЗ не создаются —
   они добавят пустые модули без выигрыша. Разделение идёт по границам ответственности внутри <code>app/</code>.</p>
 
-  <h2>4. Швы между компонентами</h2>
+  <h2>5. Швы между компонентами</h2>
   <table>
     <tr><th>Шов</th><th>Сигнатура</th><th>Сделано</th></tr>
     <tr><td>Правила чата</td><td><code>decide(msg, ctx) -&gt; Decision</code></td><td><span class="tag t-ok">да</span> <span class="num">9faa05f</span></td></tr>
@@ -146,7 +225,7 @@ docs/               архитектура, контекст, ADR</pre>
     <tr><td>Воркеры</td><td>текстовый IPC: <code>@@RVC@@</code> / <code>@@CV@@</code></td><td><span class="tag t-ok">без изменений</span></td></tr>
   </table>
 
-  <h2>5. Потоки данных</h2>
+  <h2>6. Потоки данных</h2>
   <h3>Сообщение Twitch</h3>
   <div class="flow">
     <span>twitch.py</span><i>→</i><span>on_chat</span><i>→</i><span>chat_rules.decide</span><i>→</i><span>Decision</span><i>→</i><span>App: очередь</span><i>→</i><span>worker</span><i>→</i><span>synthesis</span><i>→</i><span>wav</span><i>→</i><span>SSE /events</span><i>→</i><span>браузер</span>
@@ -156,7 +235,7 @@ docs/               архитектура, контекст, ADR</pre>
     <span>браузер</span><i>→</i><span>api.build_routes</span><i>→</i><span>обработчик (state)</span><i>→</i><span>сервис</span><i>→</i><span>ok()/fail()</span>
   </div>
 
-  <h2>6. Производительность и GPU</h2>
+  <h2>7. Производительность и GPU</h2>
   <div class="grid g2">
     <div class="card"><h4>Baseline (замерено, RTX 5070 12 ГБ)</h4>
       <table>
@@ -190,7 +269,7 @@ docs/               архитектура, контекст, ADR</pre>
     «до» и «после» сравниваются вслепую.</p>
   </div>
 
-  <h2>7. Безопасность и данные</h2>
+  <h2>8. Безопасность и данные</h2>
   <div class="card">
     <ul style="margin:0">
       <li><span class="tag t-bad">находка</span> <code>twitch_token</code> и <code>twitch_client_id</code> отдаются в <code>/api/state</code> и в SSE-событии <code>settings</code>.
@@ -200,33 +279,53 @@ docs/               архитектура, контекст, ADR</pre>
     </ul>
   </div>
 
-  <h2>8. Последовательность внедрения</h2>
+  <h2>9. Последовательность внедрения</h2>
   <table>
     <tr><th>Шаг</th><th>Что</th><th>Шов</th><th>Проверка</th><th>Статус</th></tr>
     <tr><td>A</td><td>Правила чата → <code>app/chat_rules.py</code></td><td><code>decide(msg, ctx)</code></td><td>слепок 47 кейсов</td><td><span class="tag t-ok">готово</span></td></tr>
     <tr><td>B</td><td>HTTP-слой → <code>app/api.py</code>, <code>app/paths.py</code></td><td><code>build_routes(state)</code></td><td>слепок 37 маршрутов / 25 запросов</td><td><span class="tag t-ok">готово</span></td></tr>
     <tr><td>D</td><td>Настройки → <code>app/settings.py</code></td><td><code>Settings</code>, <code>apply(data)</code></td><td>слепок 26 случаев нормализации</td><td><span class="tag t-warn">в работе</span></td></tr>
-    <tr><td>E</td><td>Разрыв цикла <code>textproc ↔ emotes</code></td><td>общие утилиты в отдельном модуле</td><td>наборы тестов + импорт-граф</td><td><span class="tag t-acc">далее</span></td></tr>
+    <tr><td>F</td><td>Очередь → <code>app/queue.py</code></td><td><code>enqueue/skip/clear</code></td><td>слепок очереди + живой чат</td><td><span class="tag t-acc">далее</span></td></tr>
     <tr><td>F</td><td>Очередь → <code>app/queue.py</code></td><td><code>enqueue/skip/clear</code></td><td>слепок очереди + живой чат</td><td><span class="tag t-acc">далее</span></td></tr>
     <tr><td>G</td><td>Синтез → <code>app/synthesis.py</code></td><td><code>synthesize(job)</code></td><td>контроль качества A/B</td><td><span class="tag t-acc">далее</span></td></tr>
     <tr><td>H</td><td>Производительность и GPU</td><td>—</td><td>baseline до/после, VRAM, качество</td><td><span class="tag t-acc">отдельный этап</span></td></tr>
   </table>
   <p style="color:var(--dim)">Каждый шаг — отдельный коммит, поведение не меняется, тесты и слепки обязательны.</p>
 
-  <h2>9. Definition of Done</h2>
+  <h2>10. Definition of Done</h2>
   <div class="card">
     <ul style="margin:0">
       <li>Функциональность, API-контракты и настройки совместимы с текущей версией.</li>
       <li>Нет циклических импортов, глобального состояния и дублирования путей.</li>
-      <li>13 наборов тестов + 3 золотых слепка зелёные на каждом шаге.</li>
+      <li>14 наборов тестов + 3 золотых слепка зелёные на каждом шаге.</li>
       <li>Качество голоса подтверждено контрольным набором (до/после).</li>
       <li>Скорость и VRAM измерены до и после — без ухудшения качества.</li>
       <li>Документация соответствует коду; на каждое существенное решение — ADR.</li>
     </ul>
   </div>
 
-  <footer>Документ отражает состояние репозитория на 15.11.2026: коммиты <code>9faa05f</code>, <code>4f89273</code>, <code>dc145cd</code>.
+  <footer>Документ отражает состояние репозитория на 15.11.2026: коммиты <code>9faa05f</code>, <code>4f89273</code>, <code>dc145cd</code>, <code>1459ae8</code>, <code>8cdfc2c</code>.
   Все цифры — результат замеров на этой машине, а не оценки.</footer>
 </div>
+<script>
+  if (window.mermaid) {
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'base',
+      themeVariables: {
+        background: '#0b0e14',
+        primaryColor: '#161b22',
+        primaryTextColor: '#e6edf3',
+        primaryBorderColor: '#2a3241',
+        lineColor: '#6b7a90',
+        secondaryColor: '#1c2230',
+        tertiaryColor: '#161b22',
+        fontSize: '13px',
+        fontFamily: 'JetBrains Mono, Consolas, monospace'
+      },
+      flowchart: { curve: 'basis', htmlLabels: true, useMaxWidth: true }
+    });
+  }
+</script>
 </body>
 </html>
