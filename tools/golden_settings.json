@@ -1,92 +1,11 @@
 {
-  "baseline": {
-    "audience": "all",
-    "autoconnect": true,
-    "blocked_voices": [],
-    "blocked_words": [],
-    "brb_message": "Скоро вернусь",
-    "brb_seconds": 0,
-    "cooldown": 0,
-    "default_voice": "c:v1794589589_bd031b",
-    "emotes": true,
-    "event_rules": {},
-    "fix_layout": false,
-    "follow_rule": "ignore",
-    "highlight_reward": "",
-    "highlight_rewards": false,
-    "ignore_users": [
-      "nightbot",
-      "streamelements",
-      "moobot",
-      "fossabot",
-      "streamlabs",
-      "wizebot"
-    ],
-    "language": "auto",
-    "max_len": 500,
-    "max_queue": 15,
-    "me_voice": "",
-    "muted": false,
-    "player_only": false,
-    "random_voice": false,
-    "read_names": false,
-    "skip_commands": true,
-    "skip_digits": true,
-    "skip_rewards": true,
-    "speak_reward": "",
-    "speed": 1.0,
-    "style": "",
-    "tts_allow": [],
-    "tts_deny": [],
-    "tts_prefix": "",
-    "volume": 0.35
-  },
   "cases": [
     {
       "case": "volume 0.5",
       "payload": {
         "volume": 0.5
       },
-      "settings": {
-        "audience": "all",
-        "autoconnect": true,
-        "blocked_voices": [],
-        "blocked_words": [],
-        "brb_message": "Скоро вернусь",
-        "brb_seconds": 0,
-        "cooldown": 0,
-        "default_voice": "c:v1794589589_bd031b",
-        "emotes": true,
-        "event_rules": {},
-        "fix_layout": false,
-        "follow_rule": "ignore",
-        "highlight_reward": "",
-        "highlight_rewards": false,
-        "ignore_users": [
-          "nightbot",
-          "streamelements",
-          "moobot",
-          "fossabot",
-          "streamlabs",
-          "wizebot"
-        ],
-        "language": "auto",
-        "max_len": 500,
-        "max_queue": 15,
-        "me_voice": "",
-        "muted": false,
-        "player_only": false,
-        "random_voice": false,
-        "read_names": false,
-        "skip_commands": true,
-        "skip_digits": true,
-        "skip_rewards": true,
-        "speak_reward": "",
-        "speed": 1.0,
-        "style": "",
-        "tts_allow": [],
-        "tts_deny": [],
-        "tts_prefix": "",
+      "changed": {
         "volume": 0.5
       }
     },
@@ -95,46 +14,7 @@
       "payload": {
         "volume": 5
       },
-      "settings": {
-        "audience": "all",
-        "autoconnect": true,
-        "blocked_voices": [],
-        "blocked_words": [],
-        "brb_message": "Скоро вернусь",
-        "brb_seconds": 0,
-        "cooldown": 0,
-        "default_voice": "c:v1794589589_bd031b",
-        "emotes": true,
-        "event_rules": {},
-        "fix_layout": false,
-        "follow_rule": "ignore",
-        "highlight_reward": "",
-        "highlight_rewards": false,
-        "ignore_users": [
-          "nightbot",
-          "streamelements",
-          "moobot",
-          "fossabot",
-          "streamlabs",
-          "wizebot"
-        ],
-        "language": "auto",
-        "max_len": 500,
-        "max_queue": 15,
-        "me_voice": "",
-        "muted": false,
-        "player_only": false,
-        "random_voice": false,
-        "read_names": false,
-        "skip_commands": true,
-        "skip_digits": true,
-        "skip_rewards": true,
-        "speak_reward": "",
-        "speed": 1.0,
-        "style": "",
-        "tts_allow": [],
-        "tts_deny": [],
-        "tts_prefix": "",
+      "changed": {
         "volume": 2.0
       }
     },
@@ -143,46 +23,7 @@
       "payload": {
         "volume": -1
       },
-      "settings": {
-        "audience": "all",
-        "autoconnect": true,
-        "blocked_voices": [],
-        "blocked_words": [],
-        "brb_message": "Скоро вернусь",
-        "brb_seconds": 0,
-        "cooldown": 0,
-        "default_voice": "c:v1794589589_bd031b",
-        "emotes": true,
-        "event_rules": {},
-        "fix_layout": false,
-        "follow_rule": "ignore",
-        "highlight_reward": "",
-        "highlight_rewards": false,
-        "ignore_users": [
-          "nightbot",
-          "streamelements",
-          "moobot",
-          "fossabot",
-          "streamlabs",
-          "wizebot"
-        ],
-        "language": "auto",
-        "max_len": 500,
-        "max_queue": 15,
-        "me_voice": "",
-        "muted": false,
-        "player_only": false,
-        "random_voice": false,
-        "read_names": false,
-        "skip_commands": true,
-        "skip_digits": true,
-        "skip_rewards": true,
-        "speak_reward": "",
-        "speed": 1.0,
-        "style": "",
-        "tts_allow": [],
-        "tts_deny": [],
-        "tts_prefix": "",
+      "changed": {
         "volume": 0.0
       }
     },
@@ -191,94 +32,14 @@
       "payload": {
         "volume": "не число"
       },
-      "settings": {
-        "audience": "all",
-        "autoconnect": true,
-        "blocked_voices": [],
-        "blocked_words": [],
-        "brb_message": "Скоро вернусь",
-        "brb_seconds": 0,
-        "cooldown": 0,
-        "default_voice": "c:v1794589589_bd031b",
-        "emotes": true,
-        "event_rules": {},
-        "fix_layout": false,
-        "follow_rule": "ignore",
-        "highlight_reward": "",
-        "highlight_rewards": false,
-        "ignore_users": [
-          "nightbot",
-          "streamelements",
-          "moobot",
-          "fossabot",
-          "streamlabs",
-          "wizebot"
-        ],
-        "language": "auto",
-        "max_len": 500,
-        "max_queue": 15,
-        "me_voice": "",
-        "muted": false,
-        "player_only": false,
-        "random_voice": false,
-        "read_names": false,
-        "skip_commands": true,
-        "skip_digits": true,
-        "skip_rewards": true,
-        "speak_reward": "",
-        "speed": 1.0,
-        "style": "",
-        "tts_allow": [],
-        "tts_deny": [],
-        "tts_prefix": "",
-        "volume": 0.35
-      }
+      "changed": {}
     },
     {
       "case": "volume 200 процентов",
       "payload": {
         "volume": 2
       },
-      "settings": {
-        "audience": "all",
-        "autoconnect": true,
-        "blocked_voices": [],
-        "blocked_words": [],
-        "brb_message": "Скоро вернусь",
-        "brb_seconds": 0,
-        "cooldown": 0,
-        "default_voice": "c:v1794589589_bd031b",
-        "emotes": true,
-        "event_rules": {},
-        "fix_layout": false,
-        "follow_rule": "ignore",
-        "highlight_reward": "",
-        "highlight_rewards": false,
-        "ignore_users": [
-          "nightbot",
-          "streamelements",
-          "moobot",
-          "fossabot",
-          "streamlabs",
-          "wizebot"
-        ],
-        "language": "auto",
-        "max_len": 500,
-        "max_queue": 15,
-        "me_voice": "",
-        "muted": false,
-        "player_only": false,
-        "random_voice": false,
-        "read_names": false,
-        "skip_commands": true,
-        "skip_digits": true,
-        "skip_rewards": true,
-        "speak_reward": "",
-        "speed": 1.0,
-        "style": "",
-        "tts_allow": [],
-        "tts_deny": [],
-        "tts_prefix": "",
+      "changed": {
         "volume": 2.0
       }
     },
@@ -287,47 +48,8 @@
       "payload": {
         "speed": 0.1
       },
-      "settings": {
-        "audience": "all",
-        "autoconnect": true,
-        "blocked_voices": [],
-        "blocked_words": [],
-        "brb_message": "Скоро вернусь",
-        "brb_seconds": 0,
-        "cooldown": 0,
-        "default_voice": "c:v1794589589_bd031b",
-        "emotes": true,
-        "event_rules": {},
-        "fix_layout": false,
-        "follow_rule": "ignore",
-        "highlight_reward": "",
-        "highlight_rewards": false,
-        "ignore_users": [
-          "nightbot",
-          "streamelements",
-          "moobot",
-          "fossabot",
-          "streamlabs",
-          "wizebot"
-        ],
-        "language": "auto",
-        "max_len": 500,
-        "max_queue": 15,
-        "me_voice": "",
-        "muted": false,
-        "player_only": false,
-        "random_voice": false,
-        "read_names": false,
-        "skip_commands": true,
-        "skip_digits": true,
-        "skip_rewards": true,
-        "speak_reward": "",
-        "speed": 0.7,
-        "style": "",
-        "tts_allow": [],
-        "tts_deny": [],
-        "tts_prefix": "",
-        "volume": 0.35
+      "changed": {
+        "speed": 0.7
       }
     },
     {
@@ -335,47 +57,8 @@
       "payload": {
         "speed": 9
       },
-      "settings": {
-        "audience": "all",
-        "autoconnect": true,
-        "blocked_voices": [],
-        "blocked_words": [],
-        "brb_message": "Скоро вернусь",
-        "brb_seconds": 0,
-        "cooldown": 0,
-        "default_voice": "c:v1794589589_bd031b",
-        "emotes": true,
-        "event_rules": {},
-        "fix_layout": false,
-        "follow_rule": "ignore",
-        "highlight_reward": "",
-        "highlight_rewards": false,
-        "ignore_users": [
-          "nightbot",
-          "streamelements",
-          "moobot",
-          "fossabot",
-          "streamlabs",
-          "wizebot"
-        ],
-        "language": "auto",
-        "max_len": 500,
-        "max_queue": 15,
-        "me_voice": "",
-        "muted": false,
-        "player_only": false,
-        "random_voice": false,
-        "read_names": false,
-        "skip_commands": true,
-        "skip_digits": true,
-        "skip_rewards": true,
-        "speak_reward": "",
-        "speed": 1.5,
-        "style": "",
-        "tts_allow": [],
-        "tts_deny": [],
-        "tts_prefix": "",
-        "volume": 0.35
+      "changed": {
+        "speed": 1.5
       }
     },
     {
@@ -383,95 +66,15 @@
       "payload": {
         "speed": "быстро"
       },
-      "settings": {
-        "audience": "all",
-        "autoconnect": true,
-        "blocked_voices": [],
-        "blocked_words": [],
-        "brb_message": "Скоро вернусь",
-        "brb_seconds": 0,
-        "cooldown": 0,
-        "default_voice": "c:v1794589589_bd031b",
-        "emotes": true,
-        "event_rules": {},
-        "fix_layout": false,
-        "follow_rule": "ignore",
-        "highlight_reward": "",
-        "highlight_rewards": false,
-        "ignore_users": [
-          "nightbot",
-          "streamelements",
-          "moobot",
-          "fossabot",
-          "streamlabs",
-          "wizebot"
-        ],
-        "language": "auto",
-        "max_len": 500,
-        "max_queue": 15,
-        "me_voice": "",
-        "muted": false,
-        "player_only": false,
-        "random_voice": false,
-        "read_names": false,
-        "skip_commands": true,
-        "skip_digits": true,
-        "skip_rewards": true,
-        "speak_reward": "",
-        "speed": 1.0,
-        "style": "",
-        "tts_allow": [],
-        "tts_deny": [],
-        "tts_prefix": "",
-        "volume": 0.35
-      }
+      "changed": {}
     },
     {
       "case": "max_len 5 -> минимум",
       "payload": {
         "max_len": 5
       },
-      "settings": {
-        "audience": "all",
-        "autoconnect": true,
-        "blocked_voices": [],
-        "blocked_words": [],
-        "brb_message": "Скоро вернусь",
-        "brb_seconds": 0,
-        "cooldown": 0,
-        "default_voice": "c:v1794589589_bd031b",
-        "emotes": true,
-        "event_rules": {},
-        "fix_layout": false,
-        "follow_rule": "ignore",
-        "highlight_reward": "",
-        "highlight_rewards": false,
-        "ignore_users": [
-          "nightbot",
-          "streamelements",
-          "moobot",
-          "fossabot",
-          "streamlabs",
-          "wizebot"
-        ],
-        "language": "auto",
-        "max_len": 20,
-        "max_queue": 15,
-        "me_voice": "",
-        "muted": false,
-        "player_only": false,
-        "random_voice": false,
-        "read_names": false,
-        "skip_commands": true,
-        "skip_digits": true,
-        "skip_rewards": true,
-        "speak_reward": "",
-        "speed": 1.0,
-        "style": "",
-        "tts_allow": [],
-        "tts_deny": [],
-        "tts_prefix": "",
-        "volume": 0.35
+      "changed": {
+        "max_len": 20
       }
     },
     {
@@ -479,95 +82,15 @@
       "payload": {
         "max_len": 9999
       },
-      "settings": {
-        "audience": "all",
-        "autoconnect": true,
-        "blocked_voices": [],
-        "blocked_words": [],
-        "brb_message": "Скоро вернусь",
-        "brb_seconds": 0,
-        "cooldown": 0,
-        "default_voice": "c:v1794589589_bd031b",
-        "emotes": true,
-        "event_rules": {},
-        "fix_layout": false,
-        "follow_rule": "ignore",
-        "highlight_reward": "",
-        "highlight_rewards": false,
-        "ignore_users": [
-          "nightbot",
-          "streamelements",
-          "moobot",
-          "fossabot",
-          "streamlabs",
-          "wizebot"
-        ],
-        "language": "auto",
-        "max_len": 500,
-        "max_queue": 15,
-        "me_voice": "",
-        "muted": false,
-        "player_only": false,
-        "random_voice": false,
-        "read_names": false,
-        "skip_commands": true,
-        "skip_digits": true,
-        "skip_rewards": true,
-        "speak_reward": "",
-        "speed": 1.0,
-        "style": "",
-        "tts_allow": [],
-        "tts_deny": [],
-        "tts_prefix": "",
-        "volume": 0.35
-      }
+      "changed": {}
     },
     {
       "case": "max_queue 0 -> минимум",
       "payload": {
         "max_queue": 0
       },
-      "settings": {
-        "audience": "all",
-        "autoconnect": true,
-        "blocked_voices": [],
-        "blocked_words": [],
-        "brb_message": "Скоро вернусь",
-        "brb_seconds": 0,
-        "cooldown": 0,
-        "default_voice": "c:v1794589589_bd031b",
-        "emotes": true,
-        "event_rules": {},
-        "fix_layout": false,
-        "follow_rule": "ignore",
-        "highlight_reward": "",
-        "highlight_rewards": false,
-        "ignore_users": [
-          "nightbot",
-          "streamelements",
-          "moobot",
-          "fossabot",
-          "streamlabs",
-          "wizebot"
-        ],
-        "language": "auto",
-        "max_len": 500,
-        "max_queue": 1,
-        "me_voice": "",
-        "muted": false,
-        "player_only": false,
-        "random_voice": false,
-        "read_names": false,
-        "skip_commands": true,
-        "skip_digits": true,
-        "skip_rewards": true,
-        "speak_reward": "",
-        "speed": 1.0,
-        "style": "",
-        "tts_allow": [],
-        "tts_deny": [],
-        "tts_prefix": "",
-        "volume": 0.35
+      "changed": {
+        "max_queue": 1
       }
     },
     {
@@ -575,47 +98,8 @@
       "payload": {
         "max_queue": 999
       },
-      "settings": {
-        "audience": "all",
-        "autoconnect": true,
-        "blocked_voices": [],
-        "blocked_words": [],
-        "brb_message": "Скоро вернусь",
-        "brb_seconds": 0,
-        "cooldown": 0,
-        "default_voice": "c:v1794589589_bd031b",
-        "emotes": true,
-        "event_rules": {},
-        "fix_layout": false,
-        "follow_rule": "ignore",
-        "highlight_reward": "",
-        "highlight_rewards": false,
-        "ignore_users": [
-          "nightbot",
-          "streamelements",
-          "moobot",
-          "fossabot",
-          "streamlabs",
-          "wizebot"
-        ],
-        "language": "auto",
-        "max_len": 500,
-        "max_queue": 100,
-        "me_voice": "",
-        "muted": false,
-        "player_only": false,
-        "random_voice": false,
-        "read_names": false,
-        "skip_commands": true,
-        "skip_digits": true,
-        "skip_rewards": true,
-        "speak_reward": "",
-        "speed": 1.0,
-        "style": "",
-        "tts_allow": [],
-        "tts_deny": [],
-        "tts_prefix": "",
-        "volume": 0.35
+      "changed": {
+        "max_queue": 100
       }
     },
     {
@@ -623,47 +107,8 @@
       "payload": {
         "muted": 1
       },
-      "settings": {
-        "audience": "all",
-        "autoconnect": true,
-        "blocked_voices": [],
-        "blocked_words": [],
-        "brb_message": "Скоро вернусь",
-        "brb_seconds": 0,
-        "cooldown": 0,
-        "default_voice": "c:v1794589589_bd031b",
-        "emotes": true,
-        "event_rules": {},
-        "fix_layout": false,
-        "follow_rule": "ignore",
-        "highlight_reward": "",
-        "highlight_rewards": false,
-        "ignore_users": [
-          "nightbot",
-          "streamelements",
-          "moobot",
-          "fossabot",
-          "streamlabs",
-          "wizebot"
-        ],
-        "language": "auto",
-        "max_len": 500,
-        "max_queue": 15,
-        "me_voice": "",
-        "muted": true,
-        "player_only": false,
-        "random_voice": false,
-        "read_names": false,
-        "skip_commands": true,
-        "skip_digits": true,
-        "skip_rewards": true,
-        "speak_reward": "",
-        "speed": 1.0,
-        "style": "",
-        "tts_allow": [],
-        "tts_deny": [],
-        "tts_prefix": "",
-        "volume": 0.35
+      "changed": {
+        "muted": true
       }
     },
     {
@@ -671,143 +116,22 @@
       "payload": {
         "muted": 0
       },
-      "settings": {
-        "audience": "all",
-        "autoconnect": true,
-        "blocked_voices": [],
-        "blocked_words": [],
-        "brb_message": "Скоро вернусь",
-        "brb_seconds": 0,
-        "cooldown": 0,
-        "default_voice": "c:v1794589589_bd031b",
-        "emotes": true,
-        "event_rules": {},
-        "fix_layout": false,
-        "follow_rule": "ignore",
-        "highlight_reward": "",
-        "highlight_rewards": false,
-        "ignore_users": [
-          "nightbot",
-          "streamelements",
-          "moobot",
-          "fossabot",
-          "streamlabs",
-          "wizebot"
-        ],
-        "language": "auto",
-        "max_len": 500,
-        "max_queue": 15,
-        "me_voice": "",
-        "muted": false,
-        "player_only": false,
-        "random_voice": false,
-        "read_names": false,
-        "skip_commands": true,
-        "skip_digits": true,
-        "skip_rewards": true,
-        "speak_reward": "",
-        "speed": 1.0,
-        "style": "",
-        "tts_allow": [],
-        "tts_deny": [],
-        "tts_prefix": "",
-        "volume": 0.35
-      }
+      "changed": {}
     },
     {
       "case": "emotes строка -> истина",
       "payload": {
         "emotes": "да"
       },
-      "settings": {
-        "audience": "all",
-        "autoconnect": true,
-        "blocked_voices": [],
-        "blocked_words": [],
-        "brb_message": "Скоро вернусь",
-        "brb_seconds": 0,
-        "cooldown": 0,
-        "default_voice": "c:v1794589589_bd031b",
-        "emotes": true,
-        "event_rules": {},
-        "fix_layout": false,
-        "follow_rule": "ignore",
-        "highlight_reward": "",
-        "highlight_rewards": false,
-        "ignore_users": [
-          "nightbot",
-          "streamelements",
-          "moobot",
-          "fossabot",
-          "streamlabs",
-          "wizebot"
-        ],
-        "language": "auto",
-        "max_len": 500,
-        "max_queue": 15,
-        "me_voice": "",
-        "muted": false,
-        "player_only": false,
-        "random_voice": false,
-        "read_names": false,
-        "skip_commands": true,
-        "skip_digits": true,
-        "skip_rewards": true,
-        "speak_reward": "",
-        "speed": 1.0,
-        "style": "",
-        "tts_allow": [],
-        "tts_deny": [],
-        "tts_prefix": "",
-        "volume": 0.35
-      }
+      "changed": {}
     },
     {
       "case": "language число -> строка",
       "payload": {
         "language": 5
       },
-      "settings": {
-        "audience": "all",
-        "autoconnect": true,
-        "blocked_voices": [],
-        "blocked_words": [],
-        "brb_message": "Скоро вернусь",
-        "brb_seconds": 0,
-        "cooldown": 0,
-        "default_voice": "c:v1794589589_bd031b",
-        "emotes": true,
-        "event_rules": {},
-        "fix_layout": false,
-        "follow_rule": "ignore",
-        "highlight_reward": "",
-        "highlight_rewards": false,
-        "ignore_users": [
-          "nightbot",
-          "streamelements",
-          "moobot",
-          "fossabot",
-          "streamlabs",
-          "wizebot"
-        ],
-        "language": "5",
-        "max_len": 500,
-        "max_queue": 15,
-        "me_voice": "",
-        "muted": false,
-        "player_only": false,
-        "random_voice": false,
-        "read_names": false,
-        "skip_commands": true,
-        "skip_digits": true,
-        "skip_rewards": true,
-        "speak_reward": "",
-        "speed": 1.0,
-        "style": "",
-        "tts_allow": [],
-        "tts_deny": [],
-        "tts_prefix": "",
-        "volume": 0.35
+      "changed": {
+        "language": "5"
       }
     },
     {
@@ -819,43 +143,11 @@
           "  b  "
         ]
       },
-      "settings": {
-        "audience": "all",
-        "autoconnect": true,
-        "blocked_voices": [],
-        "blocked_words": [],
-        "brb_message": "Скоро вернусь",
-        "brb_seconds": 0,
-        "cooldown": 0,
-        "default_voice": "c:v1794589589_bd031b",
-        "emotes": true,
-        "event_rules": {},
-        "fix_layout": false,
-        "follow_rule": "ignore",
-        "highlight_reward": "",
-        "highlight_rewards": false,
+      "changed": {
         "ignore_users": [
           "a",
           "b"
-        ],
-        "language": "auto",
-        "max_len": 500,
-        "max_queue": 15,
-        "me_voice": "",
-        "muted": false,
-        "player_only": false,
-        "random_voice": false,
-        "read_names": false,
-        "skip_commands": true,
-        "skip_digits": true,
-        "skip_rewards": true,
-        "speak_reward": "",
-        "speed": 1.0,
-        "style": "",
-        "tts_allow": [],
-        "tts_deny": [],
-        "tts_prefix": "",
-        "volume": 0.35
+        ]
       }
     },
     {
@@ -863,10 +155,7 @@
       "payload": {
         "blocked_words": "не список"
       },
-      "settings": {
-        "audience": "all",
-        "autoconnect": true,
-        "blocked_voices": [],
+      "changed": {
         "blocked_words": [
           "н",
           "е",
@@ -876,43 +165,7 @@
           "с",
           "о",
           "к"
-        ],
-        "brb_message": "Скоро вернусь",
-        "brb_seconds": 0,
-        "cooldown": 0,
-        "default_voice": "c:v1794589589_bd031b",
-        "emotes": true,
-        "event_rules": {},
-        "fix_layout": false,
-        "follow_rule": "ignore",
-        "highlight_reward": "",
-        "highlight_rewards": false,
-        "ignore_users": [
-          "nightbot",
-          "streamelements",
-          "moobot",
-          "fossabot",
-          "streamlabs",
-          "wizebot"
-        ],
-        "language": "auto",
-        "max_len": 500,
-        "max_queue": 15,
-        "me_voice": "",
-        "muted": false,
-        "player_only": false,
-        "random_voice": false,
-        "read_names": false,
-        "skip_commands": true,
-        "skip_digits": true,
-        "skip_rewards": true,
-        "speak_reward": "",
-        "speed": 1.0,
-        "style": "",
-        "tts_allow": [],
-        "tts_deny": [],
-        "tts_prefix": "",
-        "volume": 0.35
+        ]
       }
     },
     {
@@ -923,50 +176,11 @@
           "kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk": "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv"
         }
       },
-      "settings": {
-        "audience": "all",
-        "autoconnect": true,
-        "blocked_voices": [],
-        "blocked_words": [],
-        "brb_message": "Скоро вернусь",
-        "brb_seconds": 0,
-        "cooldown": 0,
-        "default_voice": "c:v1794589589_bd031b",
-        "emotes": true,
+      "changed": {
         "event_rules": {
           "raid": "announce",
           "kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk": "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv"
-        },
-        "fix_layout": false,
-        "follow_rule": "ignore",
-        "highlight_reward": "",
-        "highlight_rewards": false,
-        "ignore_users": [
-          "nightbot",
-          "streamelements",
-          "moobot",
-          "fossabot",
-          "streamlabs",
-          "wizebot"
-        ],
-        "language": "auto",
-        "max_len": 500,
-        "max_queue": 15,
-        "me_voice": "",
-        "muted": false,
-        "player_only": false,
-        "random_voice": false,
-        "read_names": false,
-        "skip_commands": true,
-        "skip_digits": true,
-        "skip_rewards": true,
-        "speak_reward": "",
-        "speed": 1.0,
-        "style": "",
-        "tts_allow": [],
-        "tts_deny": [],
-        "tts_prefix": "",
-        "volume": 0.35
+        }
       }
     },
     {
@@ -974,96 +188,14 @@
       "payload": {
         "event_rules": "нет"
       },
-      "settings": {
-        "audience": "all",
-        "autoconnect": true,
-        "blocked_voices": [],
-        "blocked_words": [],
-        "brb_message": "Скоро вернусь",
-        "brb_seconds": 0,
-        "cooldown": 0,
-        "default_voice": "c:v1794589589_bd031b",
-        "emotes": true,
-        "event_rules": {},
-        "fix_layout": false,
-        "follow_rule": "ignore",
-        "highlight_reward": "",
-        "highlight_rewards": false,
-        "ignore_users": [
-          "nightbot",
-          "streamelements",
-          "moobot",
-          "fossabot",
-          "streamlabs",
-          "wizebot"
-        ],
-        "language": "auto",
-        "max_len": 500,
-        "max_queue": 15,
-        "me_voice": "",
-        "muted": false,
-        "player_only": false,
-        "random_voice": false,
-        "read_names": false,
-        "skip_commands": true,
-        "skip_digits": true,
-        "skip_rewards": true,
-        "speak_reward": "",
-        "speed": 1.0,
-        "style": "",
-        "tts_allow": [],
-        "tts_deny": [],
-        "tts_prefix": "",
-        "volume": 0.35
-      }
+      "changed": {}
     },
     {
       "case": "канал не меняется из интерфейса",
       "payload": {
         "channel": "другой_канал"
       },
-      "settings": {
-        "audience": "all",
-        "autoconnect": true,
-        "blocked_voices": [],
-        "blocked_words": [],
-        "brb_message": "Скоро вернусь",
-        "brb_seconds": 0,
-        "cooldown": 0,
-        "default_voice": "c:v1794589589_bd031b",
-        "emotes": true,
-        "event_rules": {},
-        "fix_layout": false,
-        "follow_rule": "ignore",
-        "highlight_reward": "",
-        "highlight_rewards": false,
-        "ignore_users": [
-          "nightbot",
-          "streamelements",
-          "moobot",
-          "fossabot",
-          "streamlabs",
-          "wizebot"
-        ],
-        "language": "auto",
-        "max_len": 500,
-        "max_queue": 15,
-        "me_voice": "",
-        "muted": false,
-        "player_only": false,
-        "random_voice": false,
-        "read_names": false,
-        "skip_commands": true,
-        "skip_digits": true,
-        "skip_rewards": true,
-        "speak_reward": "",
-        "speed": 1.0,
-        "style": "",
-        "tts_allow": [],
-        "tts_deny": [],
-        "tts_prefix": "",
-        "volume": 0.35
-      }
+      "changed": {}
     },
     {
       "case": "отключённые голоса не меняются",
@@ -1072,95 +204,15 @@
           "x"
         ]
       },
-      "settings": {
-        "audience": "all",
-        "autoconnect": true,
-        "blocked_voices": [],
-        "blocked_words": [],
-        "brb_message": "Скоро вернусь",
-        "brb_seconds": 0,
-        "cooldown": 0,
-        "default_voice": "c:v1794589589_bd031b",
-        "emotes": true,
-        "event_rules": {},
-        "fix_layout": false,
-        "follow_rule": "ignore",
-        "highlight_reward": "",
-        "highlight_rewards": false,
-        "ignore_users": [
-          "nightbot",
-          "streamelements",
-          "moobot",
-          "fossabot",
-          "streamlabs",
-          "wizebot"
-        ],
-        "language": "auto",
-        "max_len": 500,
-        "max_queue": 15,
-        "me_voice": "",
-        "muted": false,
-        "player_only": false,
-        "random_voice": false,
-        "read_names": false,
-        "skip_commands": true,
-        "skip_digits": true,
-        "skip_rewards": true,
-        "speak_reward": "",
-        "speed": 1.0,
-        "style": "",
-        "tts_allow": [],
-        "tts_deny": [],
-        "tts_prefix": "",
-        "volume": 0.35
-      }
+      "changed": {}
     },
     {
       "case": "префикс число -> строка",
       "payload": {
         "tts_prefix": 123
       },
-      "settings": {
-        "audience": "all",
-        "autoconnect": true,
-        "blocked_voices": [],
-        "blocked_words": [],
-        "brb_message": "Скоро вернусь",
-        "brb_seconds": 0,
-        "cooldown": 0,
-        "default_voice": "c:v1794589589_bd031b",
-        "emotes": true,
-        "event_rules": {},
-        "fix_layout": false,
-        "follow_rule": "ignore",
-        "highlight_reward": "",
-        "highlight_rewards": false,
-        "ignore_users": [
-          "nightbot",
-          "streamelements",
-          "moobot",
-          "fossabot",
-          "streamlabs",
-          "wizebot"
-        ],
-        "language": "auto",
-        "max_len": 500,
-        "max_queue": 15,
-        "me_voice": "",
-        "muted": false,
-        "player_only": false,
-        "random_voice": false,
-        "read_names": false,
-        "skip_commands": true,
-        "skip_digits": true,
-        "skip_rewards": true,
-        "speak_reward": "",
-        "speed": 1.0,
-        "style": "",
-        "tts_allow": [],
-        "tts_deny": [],
-        "tts_prefix": "123",
-        "volume": 0.35
+      "changed": {
+        "tts_prefix": "123"
       }
     },
     {
@@ -1168,95 +220,15 @@
       "payload": {
         "неизвестный_ключ": 1
       },
-      "settings": {
-        "audience": "all",
-        "autoconnect": true,
-        "blocked_voices": [],
-        "blocked_words": [],
-        "brb_message": "Скоро вернусь",
-        "brb_seconds": 0,
-        "cooldown": 0,
-        "default_voice": "c:v1794589589_bd031b",
-        "emotes": true,
-        "event_rules": {},
-        "fix_layout": false,
-        "follow_rule": "ignore",
-        "highlight_reward": "",
-        "highlight_rewards": false,
-        "ignore_users": [
-          "nightbot",
-          "streamelements",
-          "moobot",
-          "fossabot",
-          "streamlabs",
-          "wizebot"
-        ],
-        "language": "auto",
-        "max_len": 500,
-        "max_queue": 15,
-        "me_voice": "",
-        "muted": false,
-        "player_only": false,
-        "random_voice": false,
-        "read_names": false,
-        "skip_commands": true,
-        "skip_digits": true,
-        "skip_rewards": true,
-        "speak_reward": "",
-        "speed": 1.0,
-        "style": "",
-        "tts_allow": [],
-        "tts_deny": [],
-        "tts_prefix": "",
-        "volume": 0.35
-      }
+      "changed": {}
     },
     {
       "case": "brb_seconds огромный",
       "payload": {
         "brb_seconds": 100000
       },
-      "settings": {
-        "audience": "all",
-        "autoconnect": true,
-        "blocked_voices": [],
-        "blocked_words": [],
-        "brb_message": "Скоро вернусь",
-        "brb_seconds": 2000,
-        "cooldown": 0,
-        "default_voice": "c:v1794589589_bd031b",
-        "emotes": true,
-        "event_rules": {},
-        "fix_layout": false,
-        "follow_rule": "ignore",
-        "highlight_reward": "",
-        "highlight_rewards": false,
-        "ignore_users": [
-          "nightbot",
-          "streamelements",
-          "moobot",
-          "fossabot",
-          "streamlabs",
-          "wizebot"
-        ],
-        "language": "auto",
-        "max_len": 500,
-        "max_queue": 15,
-        "me_voice": "",
-        "muted": false,
-        "player_only": false,
-        "random_voice": false,
-        "read_names": false,
-        "skip_commands": true,
-        "skip_digits": true,
-        "skip_rewards": true,
-        "speak_reward": "",
-        "speed": 1.0,
-        "style": "",
-        "tts_allow": [],
-        "tts_deny": [],
-        "tts_prefix": "",
-        "volume": 0.35
+      "changed": {
+        "brb_seconds": 2000
       }
     },
     {
@@ -1264,47 +236,8 @@
       "payload": {
         "follow_rule": "announce"
       },
-      "settings": {
-        "audience": "all",
-        "autoconnect": true,
-        "blocked_voices": [],
-        "blocked_words": [],
-        "brb_message": "Скоро вернусь",
-        "brb_seconds": 0,
-        "cooldown": 0,
-        "default_voice": "c:v1794589589_bd031b",
-        "emotes": true,
-        "event_rules": {},
-        "fix_layout": false,
-        "follow_rule": "announce",
-        "highlight_reward": "",
-        "highlight_rewards": false,
-        "ignore_users": [
-          "nightbot",
-          "streamelements",
-          "moobot",
-          "fossabot",
-          "streamlabs",
-          "wizebot"
-        ],
-        "language": "auto",
-        "max_len": 500,
-        "max_queue": 15,
-        "me_voice": "",
-        "muted": false,
-        "player_only": false,
-        "random_voice": false,
-        "read_names": false,
-        "skip_commands": true,
-        "skip_digits": true,
-        "skip_rewards": true,
-        "speak_reward": "",
-        "speed": 1.0,
-        "style": "",
-        "tts_allow": [],
-        "tts_deny": [],
-        "tts_prefix": "",
-        "volume": 0.35
+      "changed": {
+        "follow_rule": "announce"
       }
     }
   ]

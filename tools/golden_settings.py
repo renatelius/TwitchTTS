@@ -64,15 +64,23 @@ def clean(settings):
 
 
 def snapshot(base):
+    """Что изменила каждая правка относительно исходного состояния.
+
+    В слепок идут только отличия от исходных настроек: сами исходные
+    настройки - это личные предпочтения пользователя, и слепок не должен
+    ломаться от того, что он сменил громкость.
+    """
     original = clean(api(base, "/api/state")["settings"])
     rows = []
     for name, payload in CASES:
         api(base, "/api/settings", original)
         api(base, "/api/settings", payload)
+        now = clean(api(base, "/api/state")["settings"])
         rows.append({"case": name, "payload": payload,
-                     "settings": clean(api(base, "/api/state")["settings"])})
+                     "changed": {k: now[k] for k in sorted(now)
+                                 if now.get(k) != original.get(k)}})
     api(base, "/api/settings", original)
-    return {"baseline": original, "cases": rows}
+    return {"cases": rows}
 
 
 def diff(before, after, path=""):

@@ -38,6 +38,9 @@ def api(path, data=None):
 # ---------------- API ----------------
 st = api("/api/state")
 voices = st.get("voices") or []
+orig_settings = st.get("settings") or {}
+orig_volume = orig_settings.get("volume")
+orig_muted = orig_settings.get("muted")
 check("API/состояние отвечает", st.get("ok") is True)
 check("API/у голоса есть своя громкость", bool(voices) and voices[0].get("volume") is not None,
       voices[0].get("volume") if voices else "нет голосов")
@@ -63,6 +66,7 @@ check("API/мьют выключается", r.get("ok") and r["settings"]["mute
 r = api("/api/settings", {"volume": 1.8})
 check("API/общая громкость до 200 %", r.get("ok") and abs(r["settings"]["volume"] - 1.8) < 0.001,
       r.get("settings", {}).get("volume"))
+# громкость для проверок в браузере; в конце вернём как было
 api("/api/settings", {"volume": 0.35})
 
 # ---------------- поведение ----------------
@@ -172,6 +176,15 @@ with sync_playwright() as p:
     check("Страницы/без ошибок в консоли", not errs, "; ".join(errs[:4]))
     ctx.close()
     b.close()
+
+# настройки возвращаем как были: аудит не должен менять то, что у пользователя
+try:
+    if orig_volume is not None:
+        api("/api/settings", {"volume": orig_volume})
+    if orig_muted is not None:
+        api("/api/settings", {"muted": orig_muted})
+except Exception:
+    pass
 
 lines = ["%-42s %s" % (k, v) for k, v in res.items()]
 lines.append("Провалено: %d" % sum(1 for v in res.values() if v.startswith("FAIL")))

@@ -69,10 +69,9 @@ def norm(value):
                             for v in val if isinstance(v, dict)]
                 continue
             if key == "settings" and isinstance(val, dict):
-                out[key] = {k: val[k] for k in sorted(val)
-                            if k not in ("twitch_token", "twitch_client_id",
-                                         "applio_path", "cosyvoice_path")
-                            and not isinstance(val[k], (list, dict))}
+                # значения настроек - личные предпочтения пользователя, а не
+                # контракт HTTP: в слепке остаётся только состав полей
+                out[key] = sorted(val.keys())
                 continue
             if key == "status" and isinstance(val, dict):
                 # статус движка зависит от фонового старта и не входит
