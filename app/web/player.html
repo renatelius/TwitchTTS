@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Плеер озвучки — для OBS</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%238b5cf6'/%3E%3Ctext x='16' y='23' font-size='19' text-anchor='middle' fill='white' font-family='sans-serif'%3E%E2%99%AA%3C/text%3E%3C/svg%3E">
+<style>
+  html, body { margin: 0; height: 100%; background: #0b0c10; color: #fff; overflow: hidden;
+    font-family: "Inter", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; }
+  .wrap { height: 100%; display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: 16px; background: radial-gradient(circle at 50% 38%, #1b1533 0%, #0b0c10 72%); }
+  .state { font-size: 42px; font-weight: 800; letter-spacing: .3px; transition: color .2s; }
+  .idle .state { color: #4b5563; }
+  .live .state { color: #a78bfa; text-shadow: 0 0 28px rgba(139, 92, 246, .55); }
+  .who { font-size: 22px; color: #c4b5fd; min-height: 30px; font-weight: 600; }
+  .vol { width: min(360px, 60vw); accent-color: #8b5cf6; }
+  .hint { position: absolute; bottom: 20px; left: 0; right: 0; text-align: center;
+    font-size: 13px; color: #6b7280; line-height: 1.6; padding: 0 16px; }
+  code { background: rgba(255,255,255,.07); padding: 2px 7px; border-radius: 6px; }
+</style>
+</head>
+<body>
+<div class="wrap idle" id="wrap">
+  <div class="state" id="state">Готов к работе</div>
+  <div class="who" id="who"></div>
+  <input class="vol" type="range" id="vol" min="0" max="200" value="90">
+  <div class="hint">Источник в OBS: «Браузер» → <code>http://127.0.0.1:8765/player</code><br>
+    Звук идёт только отсюда. На главной панели включите «Звук только в плеере».</div>
+</div>
+<audio id="a"></audio>
+<script>
+const $ = id => document.getElementById(id);
+const audio = $('a');
+const params = new URLSearchParams(location.search);
+let volume = params.has('volume') ? Math.max(0, Math.min(2, (+params.get('volume') || 0) / 100)) : 0.9;
+$('vol').value = Math.round(volume * 100);
+// Громкость больше 100 % делаем через Web Audio, как на главной панели.
+let actx = null, gain = null, connected = false;
+function graph() {
+  if (!actx) {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    actx = new AC();
+    gain = actx.createGain();
+    gain.connect(actx.destination);
+  }
+  if (actx.state === 'suspended') actx.resume();
+  if (!connected) {
+    try { actx.createMediaElementSource(audio).connect(gain); connected = true; } catch (e) { }
+  }
+  return gain;
+}
+function applyVolume(factor) {
+  const v = volume * Math.max(0, factor == null ? 1 : factor);
+  const g = graph();
+  if (g) { g.gain.value = v; audio.volume = 1; } else { audio.volume = Math.min(1, v); }
+}
+function setState(text, live) {
+  $('state').textContent = text;
+  $('wrap').className = 'wrap ' + (live ? 'live' : 'idle');
+}
+$('vol').oninput = e => { volume = (+e.target.value) / 100; applyVolume(1); };
+document.body.addEventListener('click', () => { audio.play().catch(() => { }); });
+new EventSource('/events').onmessage = m => {
+  const ev = JSON.parse(m.data);
+  if (ev.type === 'speak') {
+    setState('Говорит', true);
+    $('who').textContent = ev.user || '';
+    audio.src = ev.url;
+    applyVolume(ev.vol != null ? ev.vol : 1);
+    audio.play().catch(() => setState('Нажмите, чтобы включить звук', false));
+  } else if (ev.type === 'stop') {
+    audio.pause(); setState('Готов к работе', false); $('who').textContent = '';
+  } else if (ev.type === 'done') {
+    setState('Готов к работе', false); $('who').textContent = '';
+  } else if (ev.type === 'settings') {
+    if (ev.settings && ev.settings.volume != null && !params.has('volume')) {
+      volume = Math.max(0, Math.min(2, ev.settings.volume));
+      $('vol').value = Math.round(volume * 100);
+      applyVolume(1);
+    }
+  }
+};
+</script>
+</body>
+</html>

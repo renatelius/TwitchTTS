@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>BRB — скоро вернусь</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23f59e0b'/%3E%3Ctext x='16' y='23' font-size='19' text-anchor='middle' fill='white' font-family='sans-serif'%3E%E2%8F%B7%3C/text%3E%3C/svg%3E">
+<style>
+  html, body { margin: 0; height: 100%; background: #07080c; color: #fff; overflow: hidden;
+    font-family: "Inter", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; }
+  .brb { height: 100%; display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: 22px; background:
+      radial-gradient(circle at 50% 30%, #241a3d 0%, #0d0b16 55%, #07080c 100%); }
+  .msg { font-size: 30px; font-weight: 700; color: #e9d5ff; opacity: .92; text-align: center; padding: 0 20px; }
+  .timer { font-size: 92px; font-weight: 800; letter-spacing: 2px; font-variant-numeric: tabular-nums;
+    background: linear-gradient(120deg, #a78bfa, #f0abfc); -webkit-background-clip: text;
+    background-clip: text; color: transparent; }
+  .sub { font-size: 16px; color: #8b8497; letter-spacing: .4px; }
+  .pulse { animation: pulse 2.4s ease-in-out infinite; }
+  @keyframes pulse { 0%, 100% { opacity: .85; } 50% { opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) { .pulse { animation: none; } }
+</style>
+</head>
+<body>
+<div class="brb">
+  <div class="msg" id="msg">Скоро вернусь</div>
+  <div class="timer pulse" id="timer">--:--</div>
+  <div class="sub" id="sub">Ожидание</div>
+</div>
+<script>
+const $ = id => document.getElementById(id);
+const params = new URLSearchParams(location.search);
+let until = 0;
+let message = params.get('msg') || 'Скоро вернусь';
+if (params.get('sec')) until = Date.now() / 1000 + (Math.max(0, +params.get('sec')) || 0);
+function fmt(left) {
+  const m = Math.floor(left / 60), s = Math.floor(left % 60);
+  return (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
+}
+function tick() {
+  const left = Math.max(0, Math.round(until - Date.now() / 1000));
+  $('timer').textContent = until ? fmt(left) : '--:--';
+  $('sub').textContent = until ? (left > 0 ? 'возвращаюсь через' : 'уже пора!') : 'Ожидание';
+  $('msg').textContent = message || 'Скоро вернусь';
+}
+setInterval(tick, 250);
+tick();
+new EventSource('/events').onmessage = m => {
+  const ev = JSON.parse(m.data);
+  if (ev.type === 'brb') {
+    until = ev.until || 0;
+    if (ev.message) message = ev.message;
+    tick();
+  }
+};
+fetch('/api/brb').then(r => r.json()).then(j => {
+  if (j && j.brb) {
+    until = j.brb.until || 0;
+    if (j.brb.message) message = j.brb.message;
+    tick();
+  }
+}).catch(() => { });
+</script>
+</body>
+</html>

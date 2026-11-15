@@ -27,6 +27,9 @@
     animation: in 320ms cubic-bezier(.2, .7, .3, 1);
   }
   .msg.speaking { border-left-color: #8b5cf6; background: rgba(60, 36, 110, .8); }
+  .msg.hl { border-left-color: #f59e0b; background: rgba(120, 53, 15, .78); }
+  .msg.pin { border-left-color: #f59e0b; background: rgba(120, 53, 15, .9); font-weight: 700; }
+  .msg { cursor: pointer; }
   .nick { margin-right: 8px; }
   @keyframes in { from { opacity: 0; transform: translateY(10px); } }
   @media (prefers-reduced-motion: reduce) { .msg { animation: none; } }
@@ -40,11 +43,29 @@ if (q.get('size')) document.body.style.fontSize = (+q.get('size') || 24) + 'px';
 const showAll = q.get('all') === '1';
 const chat = document.getElementById('chat');
 function add(ev) {
-  if (!ev.tts && !showAll) return;
+  if (!ev.tts && !ev.highlight && !showAll) return;
   const d = document.createElement('div'); d.className = 'msg'; d.dataset.id = ev.id;
+  if (ev.highlight) d.classList.add('hl');
   const n = document.createElement('span'); n.className = 'nick'; n.textContent = ev.user + ':'; n.style.color = ev.color || '#c4b5fd';
   d.append(n, document.createTextNode(ev.text)); chat.append(d);
-  while (chat.children.length > 12) chat.firstChild.remove();
+  d.title = 'Клик - убрать сообщение';
+  d.onclick = () => d.remove();
+  trim();
+}
+function trim() {
+  const msgs = chat.querySelectorAll('.msg:not(.pin)');
+  while (msgs.length > 12) {
+    const victim = Array.from(chat.children).find(x => !x.classList.contains('pin'));
+    if (!victim) break;
+    victim.remove();
+  }
+}
+function pin(ev) {
+  chat.querySelectorAll('.msg.pin').forEach(x => x.remove());
+  const d = document.createElement('div'); d.className = 'msg pin';
+  const n = document.createElement('span'); n.className = 'nick'; n.textContent = (ev.user || '') + ':'; n.style.color = ev.color || '#fbbf24';
+  d.append(n, document.createTextNode(ev.text || ''));
+  chat.prepend(d);
 }
 function mark(id, on) {
   const e = chat.querySelector('[data-id="' + CSS.escape(id) + '"]'); if (e) e.classList.toggle('speaking', on);
@@ -52,6 +73,7 @@ function mark(id, on) {
 new EventSource('/events').onmessage = m => {
   const ev = JSON.parse(m.data);
   if (ev.type === 'chat') add(ev);
+  else if (ev.type === 'pin') pin(ev);
   else if (ev.type === 'speak') mark(ev.id, true);
   else if (ev.type === 'done') mark(ev.id, false);
 };

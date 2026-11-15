@@ -77,6 +77,11 @@ def parse_privmsg(msg):
         "is_vip": "vip" in badges,
         # сообщение, отправленное вместе с наградой за баллы канала (награда с полем для текста)
         "is_reward": bool(tags.get("custom-reward-id")),
+        # системные события Twitch: рейд, подписка, битсы
+        "msg_id": tags.get("msg-id", ""),
+        "system_msg": tags.get("system-msg", ""),
+        # id награды за баллы канала
+        "reward_id": tags.get("custom-reward-id", ""),
     }
 
 

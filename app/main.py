@@ -37,6 +37,7 @@ import rvc as rvclib  # noqa: E402
 import cosyvoice as cvlib  # noqa: E402
 from textproc import clean_text, fix_layout, segments, strip_stress  # noqa: E402
 import styles as stylelib  # noqa: E402
+import features as featlib  # noqa: E402
 import emotes as emotelib  # noqa: E402
 import langs  # noqa: E402
 from twitch import TwitchChat, normalize_channel  # noqa: E402
@@ -109,6 +110,11 @@ DEFAULTS = {
     "blocked_voices": [],      # голоса, которые зрители не могут выбрать
     "tts_allow": [],           # озвучивать только этих зрителей
     "tts_deny": [],            # не озвучивать этих зрителей
+    "player_only": False,      # звук только на странице-плеере (для OBS)
+    "highlight_rewards": False,  # выделять сообщения, отправленные за награду
+    "event_rules": {},         # правила по событиям: рейд/подписка/битсы -> announce|speak|ignore
+    "brb_seconds": 0,          # таймер BRB-экрана, секунд
+    "brb_message": "Скоро вернусь",
 }
 
 def voice_blocked(settings, voice):
@@ -181,6 +187,8 @@ class App:
         self.settings = dict(DEFAULTS)
         self.settings.update({k: v for k, v in load_json(DATA / "settings.json", {}).items() if k in DEFAULTS})
         self.user_voices = load_json(DATA / "user_voices.json", {})
+        self.style_presets = {}      # подбор стилей под каждый голос
+        self._presets_mtime = 0.0
         if os.environ.get("TTS_MOCK") == "1":
             self.engine = MockEngine()
         else:
@@ -211,6 +219,7 @@ class App:
         self.paused = False
         self.last_spoke = {}
         self.loop = None
+        self.brb = {"until": 0.0, "message": self.settings.get("brb_message") or "Скоро вернусь"}
 
     # ---------- события для браузера ----------
     def broadcast(self, event):
@@ -319,6 +328,31 @@ class App:
                 return v
         return enabled[0] if enabled else None
 
+    def style_params(self, voice_id, style_key):
+        """Параметры стиля речи: свои для голоса, иначе общие.
+
+        Свои параметры подбирает tools/gen_style_presets.py: у каждого голоса
+        своя "радостность" и свой "шёпот". Файл перечитывается, если он
+        изменился.
+        """
+        sp = stylelib.params(style_key)
+        if not style_key:
+            return sp
+        try:
+            path = DATA / "style_presets.json"
+            mt = path.stat().st_mtime
+            if mt != self._presets_mtime:
+                self.style_presets = load_json(path, {})
+                self._presets_mtime = mt
+        except OSError:
+            pass
+        preset = (self.style_presets.get(voice_id) or {}).get(style_key)
+        if preset:
+            for k in ("speed", "pitch", "temp", "gain", "lowpass"):
+                if k in preset:
+                    sp[k] = preset[k]
+        return sp
+
     def voice_for(self, login):
         enabled = self.voices.enabled()
         chosen = self.user_voices.get(login)
@@ -355,6 +389,7 @@ class App:
                  "color": m["color"], "text": text, "tts": False, "note": ""}
         low = text.lower()
         first, _, rest = low.partition(" ")
+        first_raw, _, rest_raw = text.partition(" ")
 
         if first in ("!г", "!голос", "!voice", "!tts", "!ттс"):
             self.broadcast(event)
@@ -378,6 +413,21 @@ class App:
             self.broadcast(event)
             self.skip()
             return
+
+        # события Twitch: рейд, подписка, битсы - по системным тегам IRC
+        kind = featlib.detect_event(m.get("msg_id", ""), m.get("system_msg", ""))
+        if kind:
+            self.broadcast(event)
+            self.handle_event(kind, m)
+            return
+
+        # команды: курс валют, перевод, выделение, закрепление, BRB
+        if self.handle_command(m, first_raw.lower(), rest_raw, event):
+            return
+
+        # сообщение, отправленное за награду, можно выделить
+        if m.get("is_reward") and s.get("highlight_rewards"):
+            event["highlight"] = True
 
         note = ""
         if s.get("muted"):
@@ -607,7 +657,8 @@ class App:
     # ---------- очередь: синтез и проигрывание ----------
     def _synth(self, job):
         out = CACHE / ("%s.wav" % uuid.uuid4().hex)
-        sp = stylelib.params(job.get("style") or self.settings.get("style") or "")
+        sp = self.style_params(job.get("voice_id", ""),
+                               job.get("style") or self.settings.get("style") or "")
         segs = segments(job["text"], self.settings["language"])
         latents = self.voices.latents(job["voice_id"])
         voice = self.voices.get(job["voice_id"])
@@ -712,6 +763,135 @@ class App:
             self.push_status()
             self.cleanup_cache()
 
+    # ---------- события, команды, BRB ----------
+    def spawn(self, coro):
+        """Запускает корутину из обработчика чата."""
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            coro.close()
+            return None
+        try:
+            if self.loop is not None:
+                return self.loop.create_task(coro)
+            return loop.create_task(coro)
+        except RuntimeError:
+            coro.close()
+            return None
+
+    def handle_event(self, kind, m):
+        """Правило на событие Twitch: рейд, подписка, битсы."""
+        rules = self.settings.get("event_rules") or {}
+        action = str(rules.get(kind, featlib.DEFAULT_RULES.get(kind, "ignore"))).lower()
+        if action == "ignore":
+            return
+        text = featlib.event_text(kind, m.get("name", ""), m.get("system_msg", ""))
+        if not text:
+            return
+        ev = {"type": "chat", "id": m.get("id") or uuid.uuid4().hex,
+              "user": m.get("name") or "", "color": "#f59e0b", "text": text,
+              "tts": False, "event": kind, "highlight": True}
+        self.broadcast(ev)
+        if action == "speak":
+            voice = self.default_voice()
+            if voice:
+                self.enqueue(ev["id"], ev["user"], text, voice)
+
+    def handle_command(self, m, cmd, rest, event):
+        """Команды чата. True - сообщение обработано, озвучивать его не нужно."""
+        mod = bool(m["is_mod"] or m["is_broadcaster"])
+        rest = (rest or "").strip()
+        if cmd in ("!курс", "!курсы", "!rate", "!fx", "!валюта"):
+            self.broadcast(event)
+            amount, src, dst = featlib.parse_rate(rest)
+            if not amount or not src:
+                self.broadcast({"type": "note", "text": "Формат: !курс 100 usd [rub]"})
+                return True
+            self.spawn(self._rate_reply(amount, src, dst))
+            return True
+        if cmd in ("!перевод", "!переведи", "!translate", "!tr"):
+            self.broadcast(event)
+            if not rest:
+                self.broadcast({"type": "note", "text": "Формат: !перевод привет [en]"})
+                return True
+            lang = "ru"
+            parts = rest.rsplit(" ", 1)
+            if len(parts) == 2 and len(parts[1]) <= 5 and parts[1].isalpha() and parts[1].lower() != "ru":
+                lang, rest = parts[1].lower(), parts[0]
+            self.spawn(self._translate_reply(rest, lang))
+            return True
+        if cmd in ("!выделить", "!highlight") and mod:
+            self.broadcast(event)
+            self.broadcast({"type": "chat", "id": uuid.uuid4().hex, "user": m["name"],
+                            "color": m["color"], "text": rest or "(пусто)", "tts": False,
+                            "highlight": True})
+            return True
+        if cmd in ("!закрепить", "!pin") and mod:
+            self.broadcast(event)
+            self.broadcast({"type": "pin", "text": rest or "(пусто)", "user": m["name"]})
+            return True
+        if cmd in ("!брб", "!brb") and mod:
+            self.broadcast(event)
+            seconds, message = featlib.parse_brb(rest)
+            self.set_brb(seconds, message)
+            return True
+        return False
+
+    async def _reply(self, text, speak=True):
+        """Ответ в чат и (по желанию) голосом."""
+        self.broadcast({"type": "note", "text": text})
+        if not speak:
+            return
+        voice = self.default_voice()
+        if voice:
+            self.enqueue(uuid.uuid4().hex, "Бот", text, voice)
+
+    async def _rate_reply(self, amount, src, dst):
+        try:
+            loop = asyncio.get_running_loop()
+            value = await loop.run_in_executor(None, featlib.convert, amount, src, dst)
+        except Exception as e:
+            log.warning("не удалось узнать курс: %r", e)
+            value = None
+        if value is None:
+            await self._reply("Не удалось узнать курс %s." % src.upper())
+            return
+        await self._reply("%s %s = %s %s" % (featlib.fmt_num(amount, 0), src.upper(),
+                                            featlib.fmt_num(value), dst.upper()))
+
+    async def _translate_reply(self, text, lang="ru"):
+        try:
+            loop = asyncio.get_running_loop()
+            got = await loop.run_in_executor(None, featlib.translate_safe, text, lang)
+        except Exception as e:
+            log.warning("не удалось перевести: %r", e)
+            got = ""
+        if not got:
+            await self._reply("Не удалось перевести текст.")
+            return
+        await self._reply(got)
+
+    def brb_state(self):
+        """Состояние BRB-экрана."""
+        until = float(self.brb.get("until") or 0)
+        left = max(0.0, until - time.time())
+        return {"until": until, "left": left, "active": left > 0,
+                "message": self.brb.get("message") or ""}
+
+    def set_brb(self, seconds, message=""):
+        """Включает или выключает BRB-экран с таймером."""
+        try:
+            seconds = max(0, int(seconds or 0))
+        except (TypeError, ValueError):
+            seconds = 0
+        msg = (message or "").strip() or (self.settings.get("brb_message") or "Скоро вернусь")
+        self.brb = {"until": (time.time() + seconds) if seconds else 0.0, "message": msg}
+        self.settings["brb_seconds"] = seconds
+        self.settings["brb_message"] = msg
+        self.save_settings()
+        self.broadcast({"type": "brb", **self.brb_state()})
+        return self.brb_state()
+
     def skip(self):
         self.skip_event.set()
 
@@ -795,6 +975,29 @@ async def page_poll(request):
     return FileResponse(WEB / "poll.html")
 
 
+async def page_player(request):
+    """Плеер озвучки отдельной страницей - для OBS (свой звуковой канал)."""
+    return FileResponse(WEB / "player.html")
+
+
+async def page_brb(request):
+    """BRB-экран с таймером."""
+    return FileResponse(WEB / "brb.html")
+
+
+async def api_brb(request):
+    """BRB-экран: GET - текущее состояние, POST - поставить таймер."""
+    a = app_state
+    if request.method == "POST":
+        data = await body(request)
+        try:
+            seconds = int(data.get("seconds") or 0)
+        except (TypeError, ValueError):
+            seconds = 0
+        a.set_brb(seconds, str(data.get("message") or ""))
+    return ok(brb=a.brb_state())
+
+
 async def events(request):
     a = app_state
     q = asyncio.Queue(maxsize=1000)
@@ -820,7 +1023,7 @@ async def events(request):
 
 async def api_state(request):
     a = app_state
-    return ok(status=a.status(), settings=a.settings, voices=a.voices.list())
+    return ok(status=a.status(), settings=a.settings, voices=a.voices.list(), brb=a.brb_state())
 
 
 async def api_settings(request):
@@ -840,6 +1043,10 @@ async def api_settings(request):
                 val = float(val)
             elif isinstance(default, list):
                 val = [str(x).strip() for x in val if str(x).strip()][:200]
+            elif isinstance(default, dict):
+                if not isinstance(val, dict):
+                    continue
+                val = {str(k)[:40]: str(v)[:40] for k, v in list(val.items())[:50]}
             else:
                 val = str(val)
         except (TypeError, ValueError):
@@ -1310,6 +1517,8 @@ routes = [
     Route("/voices", page_voices),
     Route("/overlay", page_overlay),
     Route("/poll", page_poll),
+    Route("/player", page_player),
+    Route("/brb", page_brb),
     Route("/events", events),
     Route("/api/state", api_state),
     Route("/api/settings", api_settings, methods=["POST"]),
@@ -1319,6 +1528,7 @@ routes = [
     Route("/api/say", api_say, methods=["POST"]),
     Route("/api/preview", api_preview, methods=["POST"]),
     Route("/api/announce", api_announce, methods=["POST"]),
+    Route("/api/brb", api_brb, methods=["GET", "POST"]),
     Route("/api/emotes", api_emotes, methods=["GET"]),
     Route("/api/emotes/reset", api_emotes_reset, methods=["POST"]),
     Route("/api/voices", api_voices, methods=["GET"]),

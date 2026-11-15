@@ -91,12 +91,49 @@
         <label for="testText">Фраза для проверки звука</label>
         <input type="text" id="testText" value="Привет, чат! Hello everyone!">
       </div>
+      <div class="field" style="margin-top:10px">
+        <label for="testStyle">Стиль речи</label>
+        <select id="testStyle">
+          <option value="">Нейтрально</option>
+          <option value="радостно">Радостно</option>
+          <option value="грустно">Грустно</option>
+          <option value="зло">Зло</option>
+          <option value="шёпотом">Шёпотом</option>
+          <option value="спокойно">Спокойно</option>
+        </select>
+      </div>
       <button class="btn" id="testBtn">Сказать голосом</button>
       <div class="err" id="testErr"></div>
     </div>
 
+    <div class="card">
+      <div class="card-head">
+        <div>
+          <h2>Для OBS</h2>
+          <span class="sub">Плеер звука отдельной страницей и BRB-экран с таймером.</span>
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn secondary" id="openPlayer">Плеер звука</button>
+        <button class="btn secondary" id="openBrb">BRB-экран</button>
+      </div>
+      <div class="field" style="margin-top:12px">
+        <label for="brbMin">BRB-таймер, минут</label>
+        <input type="number" id="brbMin" min="0" max="360" value="5">
+      </div>
+      <div class="field">
+        <label for="brbMsg">Текст BRB-экрана</label>
+        <input type="text" id="brbMsg" value="Скоро вернусь">
+      </div>
+      <div class="btn-row">
+        <button class="btn" id="brbBtn">Показать BRB</button>
+        <button class="btn secondary" id="brbOff">Выключить</button>
+      </div>
+      <div class="muted" id="brbState">BRB выключен</div>
+    </div>
+
     <button class="btn secondary" id="settingsBtn">⚙ Настройки</button>
-    <div class="hint">Чат для OBS (прозрачный фон): добавьте «Браузер» с адресом<br><code>http://127.0.0.1:8765/overlay</code></div>
+    <div class="hint">Чат для OBS (прозрачный фон): добавьте «Браузер» с адресом<br><code>http://127.0.0.1:8765/overlay</code><br>Плеер звука отдельной страницей: <code>http://127.0.0.1:8765/player</code></div>
   </aside>
 </div>
 
@@ -203,6 +240,49 @@
     <div class="hint">Стиль меняется и в самом сообщении: <b>(радостно) привет</b>, <b>(зло) хватит</b>, <b>(шёпотом) тише</b>, <b>(грустно) …</b>. Ремарка стиля не читается.</div>
   </div>
 
+  <div class="settings-group">
+    <div class="group-title">События и интеграции</div>
+    <label class="check"><input type="checkbox" id="s_player_only"> Звук только на странице-плеере (для OBS)</label>
+    <label class="check"><input type="checkbox" id="s_highlight_rewards"> Выделять сообщения, отправленные за награду</label>
+    <div class="row field" style="margin-top:12px">
+      <div>
+        <label for="s_rule_raid">Рейд</label>
+        <select id="s_rule_raid">
+          <option value="ignore">Не реагировать</option>
+          <option value="announce">Написать в чат</option>
+          <option value="speak">Озвучить</option>
+        </select>
+      </div>
+      <div>
+        <label for="s_rule_sub">Подписка</label>
+        <select id="s_rule_sub">
+          <option value="ignore">Не реагировать</option>
+          <option value="announce">Написать в чат</option>
+          <option value="speak">Озвучить</option>
+        </select>
+      </div>
+    </div>
+    <div class="row field">
+      <div>
+        <label for="s_rule_gift">Подарочная подписка</label>
+        <select id="s_rule_gift">
+          <option value="ignore">Не реагировать</option>
+          <option value="announce">Написать в чат</option>
+          <option value="speak">Озвучить</option>
+        </select>
+      </div>
+      <div>
+        <label for="s_rule_bits">Битсы</label>
+        <select id="s_rule_bits">
+          <option value="ignore">Не реагировать</option>
+          <option value="announce">Написать в чат</option>
+          <option value="speak">Озвучить</option>
+        </select>
+      </div>
+    </div>
+    <div class="hint">События читаются из чата Twitch: рейд, подписка, подарочная подписка, битсы. Фоллов в чате не видно - для них нужен токен Twitch API. Сообщения модератора: <b>!выделить текст</b>, <b>!закрепить текст</b>, <b>!брб 10</b>.</div>
+  </div>
+
   <div class="row" style="justify-content:flex-end; margin-top:20px">
     <span></span>
     <button class="btn fit" id="dlgCancel">Отмена</button>
@@ -265,6 +345,7 @@ function addMsg(ev, old) {
     div.className = 'msg note'; div.textContent = '• ' + ev.text;
   } else {
     div.className = 'msg ' + (ev.tts ? (old ? '' : 'wait') : 'skip');
+    if (ev.highlight) div.classList.add('hl');
     div.dataset.id = ev.id;
     const nick = document.createElement('span');
     nick.className = 'nick'; nick.textContent = ev.user + ':';
@@ -358,6 +439,7 @@ function renderVoices() {
 async function loadAll() {
   const r = await api('/api/state');
   st = r.status; settings = r.settings; voices = r.voices;
+  if (r.brb) brbUntil = r.brb.until || 0;
   renderStatus(); renderSettings();
 }
 
@@ -374,15 +456,23 @@ function connectEvents() {
     else if (ev.type === 'status') { st = ev; renderStatus(); }
     else if (ev.type === 'speak') {
       mark(ev.id, 'speaking');
-      player.src = ev.url;
-      applyVolume(ev.vol != null ? ev.vol : voiceFactor(ev.voice_id));
-      player.play().catch(() => { $('unlock').style.display = 'flex'; });
+      if (!settings.player_only) {
+        player.src = ev.url;
+        applyVolume(ev.vol != null ? ev.vol : voiceFactor(ev.voice_id));
+        player.play().catch(() => { $('unlock').style.display = 'flex'; });
+      }
     } else if (ev.type === 'stop') { player.pause(); }
     else if (ev.type === 'done') mark(ev.id, '');
     else if (ev.type === 'tts_error') { mark(ev.id, ''); addMsg({type: 'note', text: 'Ошибка озвучки: ' + ev.error}); }
     else if (ev.type === 'settings') {
       settings = ev.settings; renderSettings();
       if (settings.muted) player.pause();
+    }
+    else if (ev.type === 'pin') addPin(ev);
+    else if (ev.type === 'brb') {
+      brbUntil = ev.until || 0;
+      if (ev.message) $('brbMsg').value = ev.message;
+      renderBrb();
     }
     else if (ev.type === 'voices') loadAll();
   };
@@ -410,7 +500,9 @@ $('volume').onchange = () => api('/api/settings', {volume: settings.volume});
 $('defVoice').onchange = e => api('/api/settings', {default_voice: e.target.value});
 $('testBtn').onclick = async () => {
   $('testErr').textContent = '';
-  const r = await api('/api/say', {text: $('testText').value, voice: $('defVoice').value});
+  const st = $('testStyle').value;
+  const txt = st ? '(' + st + ') ' + $('testText').value : $('testText').value;
+  const r = await api('/api/say', {text: txt, voice: $('defVoice').value});
   if (!r.ok) $('testErr').textContent = r.error;
 };
 $('testText').onkeydown = e => { if (e.key === 'Enter') $('testBtn').click(); };
@@ -426,11 +518,16 @@ async function loadEmotesInfo(){
   }catch(e){}
 }
 
-const numeric = ['max_len', 'max_queue', 'cooldown'], bools = ['read_names', 'random_voice', 'skip_commands', 'skip_digits', 'skip_rewards', 'autoconnect', 'emotes', 'fix_layout'],
+const numeric = ['max_len', 'max_queue', 'cooldown'], bools = ['read_names', 'random_voice', 'skip_commands', 'skip_digits', 'skip_rewards', 'autoconnect', 'emotes', 'fix_layout', 'player_only', 'highlight_rewards'],
       lists = ['ignore_users', 'blocked_words', 'blocked_voices', 'tts_allow', 'tts_deny'], selects = ['language', 'audience', 'me_voice', 'style'];
 $('settingsBtn').onclick = () => {
   numeric.concat(selects).forEach(k => $('s_' + k).value = settings[k] == null ? '' : settings[k]);
   $('s_tts_prefix').value = settings.tts_prefix || '';
+  const rules = settings.event_rules || {};
+  $('s_rule_raid').value = rules.raid || 'ignore';
+  $('s_rule_sub').value = rules.sub || 'ignore';
+  $('s_rule_gift').value = rules.gift || 'ignore';
+  $('s_rule_bits').value = rules.bits || 'ignore';
   bools.forEach(k => $('s_' + k).checked = settings[k]);
   lists.forEach(k => $('s_' + k).value = settings[k].join(', '));
   $('s_speed').value = Math.round(settings.speed * 100); $('speedVal').textContent = settings.speed.toFixed(2) + '×';
@@ -446,8 +543,48 @@ $('dlgSave').onclick = async () => {
   bools.forEach(k => d[k] = $('s_' + k).checked);
   lists.forEach(k => d[k] = $('s_' + k).value.split(',').map(x => x.trim()).filter(Boolean));
   d.tts_prefix = $('s_tts_prefix').value.trim();
+  d.event_rules = {
+    raid: $('s_rule_raid').value, sub: $('s_rule_sub').value,
+    gift: $('s_rule_gift').value, bits: $('s_rule_bits').value
+  };
   await api('/api/settings', d);
   $('dlg').close();
+};
+
+// ---------- BRB-экран и закреплённое сообщение ----------
+let brbUntil = 0;
+function fmtBrb(left) {
+  const m = Math.floor(left / 60), s = Math.floor(left % 60);
+  return (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
+}
+function renderBrb() {
+  const el = $('brbState');
+  if (!el) return;
+  if (!brbUntil) { el.textContent = 'BRB выключен'; return; }
+  const left = Math.max(0, Math.round(brbUntil - Date.now() / 1000));
+  el.textContent = left ? 'BRB включён: ' + fmtBrb(left) : 'BRB: пора возвращаться';
+}
+setInterval(renderBrb, 1000);
+function addPin(ev) {
+  chat.querySelectorAll('.msg.pin').forEach(x => x.remove());
+  const d = document.createElement('div');
+  d.className = 'msg pin';
+  const n = document.createElement('span');
+  n.className = 'nick'; n.textContent = (ev.user || '') + ':';
+  n.style.color = ev.color || '#fbbf24';
+  d.append(n, document.createTextNode(ev.text || ''));
+  chat.prepend(d);
+}
+$('openPlayer').onclick = () => window.open('/player', '_blank', 'noopener');
+$('openBrb').onclick = () => window.open('/brb', '_blank', 'noopener');
+$('brbBtn').onclick = async () => {
+  const mins = Math.max(0, +$('brbMin').value || 0);
+  const r = await api('/api/brb', {seconds: Math.round(mins * 60), message: $('brbMsg').value});
+  if (r && r.ok) { brbUntil = r.brb.until || 0; renderBrb(); }
+};
+$('brbOff').onclick = async () => {
+  const r = await api('/api/brb', {seconds: 0});
+  if (r && r.ok) { brbUntil = 0; renderBrb(); }
 };
 
 loadAll().then(connectEvents);
