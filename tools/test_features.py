@@ -4,7 +4,6 @@
 префикс озвучки, голос на одно сообщение, запрет голосов, списки зрителей."""
 import os
 import sys
-import threading
 
 os.environ["TTS_MOCK"] = "1"
 APP = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app")
@@ -51,7 +50,6 @@ check("список «только своих»: свой", appmod.login_allowed
 
 # --- живой путь чата ---
 a = appmod.App()
-a.wake = threading.Event()
 events = []
 a.broadcast = lambda ev: events.append(ev)
 
@@ -79,7 +77,7 @@ def msg(text, login="зритель", **kw):
 
 
 a.settings["tts_prefix"] = "!!!"
-a.pending.clear()
+a.clear()
 a.on_chat(msg("привет"))
 check("префикс: без префикса не озвучиваем", last_chat().get("note"), "без префикса")
 
@@ -87,7 +85,7 @@ a.on_chat(msg("!!! привет"))
 check("префикс: с префиксом озвучиваем", last_chat().get("tts"), True)
 check("префикс: текст без префикса", last_chat().get("text"), "привет")
 
-a.pending.clear()
+a.clear()
 a.on_chat(msg("!!!#дудя привет"))
 v = a.voices.resolve("дудя")
 check("голос на сообщение: взят указанный голос", last_chat().get("voice"), v["name"] if v else "дудя")

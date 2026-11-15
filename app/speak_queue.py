@@ -1,0 +1,132 @@
+# -*- coding: utf-8 -*-
+"""Очередь озвучки: порядок сообщений, пауза, очистка, пропуск.
+
+Модуль ничего не знает про модели и про HTTP. Синтез приходит готовой
+функцией, события - колбэком, поэтому очередь можно проверять отдельно
+(tools/test_queue.py) и менять без риска сломать озвучку.
+
+Зависимости (передаются при создании):
+    synthesize(job)  -> (path, dur)   асинхронная функция синтеза реплики
+    broadcast(event)                  отправить событие подписчикам (SSE)
+    is_ready()      -> bool           готов ли движок синтеза
+    on_state()                       состояние изменилось (статус в интерфейсе)
+    on_finished()                    задание обработано (чистка кэша)
+
+Модуль назван speak_queue, а не queue: каталог приложения стоит первым в
+sys.path, и файл queue.py перекрыл бы стандартный модуль queue, который
+нужен concurrent.futures и logging.handlers.
+"""
+import asyncio
+import logging
+from collections import deque
+
+log = logging.getLogger("queue")
+
+
+class SpeakQueue:
+    """Очередь реплик: одна озвучивается, остальные ждут."""
+
+    def __init__(self, synthesize, broadcast, is_ready, on_state=None, on_finished=None):
+        self.synthesize = synthesize
+        self.broadcast = broadcast
+        self.is_ready = is_ready
+        self.on_state = on_state or (lambda: None)
+        self.on_finished = on_finished or (lambda: None)
+        self.pending = deque()
+        self.gen = 0          # номер поколения: сброс очереди увеличивает его
+        self.now = None       # задание, которое сейчас звучит
+        self.paused = False
+        self.wake = None      # событие "пора взять задание"
+        self.skip_event = None  # событие "прервать текущее задание"
+
+    # ---------- состояние ----------
+    def state(self):
+        """Состояние очереди для интерфейса."""
+        now = self.now
+        return {
+            "queue": len(self.pending) + (1 if now else 0),
+            "paused": self.paused,
+            "now": now and {"id": now["id"], "user": now["user"], "voice": now["voice_name"]},
+        }
+
+    def pending_len(self):
+        """Сколько реплик ждут своей очереди."""
+        return len(self.pending)
+
+    # ---------- команды ----------
+    def enqueue(self, job):
+        """Кладёт задание в очередь и будит воркер."""
+        job = dict(job)
+        job["gen"] = self.gen
+        self.pending.append(job)
+        self.wake_up()
+        self.on_state()
+
+    def skip(self):
+        """Прерывает текущую реплику (озвучка замолкает)."""
+        if self.skip_event is not None:
+            self.skip_event.set()
+
+    def clear(self):
+        """Убирает все ожидающие задания и прерывает текущее."""
+        self.gen += 1
+        for job in self.pending:
+            self.broadcast({"type": "done", "id": job["id"]})
+        self.pending.clear()
+        self.skip()
+        self.on_state()
+
+    def pause(self):
+        """Ставит очередь на паузу: новые реплики копятся."""
+        self.paused = True
+
+    def resume(self):
+        """Снимает паузу и будит воркер."""
+        self.paused = False
+        self.wake_up()
+
+    def wake_up(self):
+        """Просит воркер проверить очередь."""
+        if self.wake is not None:
+            self.wake.set()
+
+    # ---------- работа ----------
+    def start(self, loop=None):
+        """Готовит очередь к работе (нужен запущенный цикл событий)."""
+        self.loop = loop or asyncio.get_running_loop()
+        self.wake = asyncio.Event()
+        self.skip_event = asyncio.Event()
+
+    async def worker(self):
+        """Берёт сообщения по одному: озвучивает, отправляет в браузер, ждёт конца звучания."""
+        while True:
+            if not self.pending or self.paused or not self.is_ready():
+                self.wake.clear()
+                try:
+                    await asyncio.wait_for(self.wake.wait(), timeout=1.0)
+                except asyncio.TimeoutError:
+                    pass
+                continue
+            job = self.pending.popleft()
+            self.now = job
+            self.on_state()
+            self.skip_event.clear()
+            try:
+                path, dur = await self.synthesize(job)
+                if job["gen"] == self.gen and not self.skip_event.is_set():
+                    self.broadcast({"type": "speak", "id": job["id"], "url": "/audio/" + path.name,
+                                    "user": job["user"], "voice": job["voice_name"],
+                                    "voice_id": job.get("voice_id", ""),
+                                    "vol": job.get("vol", 1.0), "duration": dur})
+                    try:
+                        await asyncio.wait_for(self.skip_event.wait(), timeout=dur + 0.35)
+                        self.broadcast({"type": "stop"})
+                    except asyncio.TimeoutError:
+                        pass
+            except Exception as e:
+                log.exception("ошибка озвучки")
+                self.broadcast({"type": "tts_error", "id": job["id"], "error": str(e)})
+            self.broadcast({"type": "done", "id": job["id"]})
+            self.now = None
+            self.on_state()
+            self.on_finished()

@@ -39,6 +39,7 @@ import styles as stylelib  # noqa: E402
 import features as featlib  # noqa: E402
 import chat_rules as chatrules  # noqa: E402
 import api as apilib  # noqa: E402
+import speak_queue as queuelib  # noqa: E402
 from chat_rules import login_allowed, split_prefix, split_voice_prefix, voice_blocked  # noqa: E402
 import emotes as emotelib  # noqa: E402
 import langs  # noqa: E402
@@ -110,10 +111,11 @@ class App:
         self.executor = ThreadPoolExecutor(max_workers=1)   # модель одна, работаем по очереди
         self.clients = set()
         self.history = deque(maxlen=150)
-        self.pending = deque()
-        self.gen = 0
-        self.now = None
-        self.paused = False
+        self.queue = queuelib.SpeakQueue(synthesize=self._synthesize_job,
+                                        broadcast=self.broadcast,
+                                        is_ready=lambda: self.engine.status == "ready",
+                                        on_state=self.push_status,
+                                        on_finished=self.cleanup_cache)
         self.last_spoke = {}
         self.loop = None
         self.brb = {"until": 0.0, "message": self.settings.get("brb_message") or "Скоро вернусь"}
@@ -135,6 +137,7 @@ class App:
                 self.clients.discard(q)
 
     def status(self):
+        q = self.queue.state()
         return {
             "type": "status",
             "engine": self.engine.info(),
@@ -142,9 +145,9 @@ class App:
             "cosyvoice": self.cosyvoice.info(),
             "train": self.trainer.status(),
             "twitch": {"status": self.twitch.status, "detail": self.twitch.detail, "channel": self.twitch.channel},
-            "queue": len(self.pending) + (1 if self.now else 0),
-            "paused": self.paused,
-            "now": self.now and {"id": self.now["id"], "user": self.now["user"], "voice": self.now["voice_name"]},
+            "queue": q["queue"],
+            "paused": q["paused"],
+            "now": q["now"],
         }
 
     def push_status(self):
@@ -280,7 +283,7 @@ class App:
             reward_title = self.reward_title(m.get("reward_id", ""))
         ctx = chatrules.Context(settings=self.settings,
                                 last_spoke=self.last_spoke.get(m["login"], 0),
-                                queue_len=len(self.pending),
+                                queue_len=self.queue.pending_len(),
                                 now=time.time(),
                                 reward_title=reward_title)
         d = chatrules.decide(m, ctx)
@@ -391,12 +394,9 @@ class App:
         return out
 
     def enqueue(self, msg_id, user, speak_text, voice, style=""):
-        self.pending.append({"id": msg_id, "user": user, "text": speak_text, "voice_id": voice["id"],
-                             "voice_name": voice["name"], "style": style,
-                             "vol": _vol_factor(voice.get("volume")),
-                             "gen": self.gen})
-        self.wake.set()
-        self.push_status()
+        self.queue.enqueue({"id": msg_id, "user": user, "text": speak_text, "voice_id": voice["id"],
+                            "voice_name": voice["name"], "style": style,
+                            "vol": _vol_factor(voice.get("volume"))})
 
     # ---------- CosyVoice 3 с записями эмоций ----------
     def _cosy_parts(self, segs, voice):
@@ -567,39 +567,10 @@ class App:
                                          pitch + sp["pitch"], style=sp)
         return out, dur
 
-    async def worker(self):
-        """Берёт сообщения по одному: озвучивает, отправляет в браузер, ждёт конца звучания."""
-        while True:
-            if not self.pending or self.paused or self.engine.status != "ready":
-                self.wake.clear()
-                try:
-                    await asyncio.wait_for(self.wake.wait(), timeout=1.0)
-                except asyncio.TimeoutError:
-                    pass
-                continue
-            job = self.pending.popleft()
-            self.now = job
-            self.push_status()
-            self.skip_event.clear()
-            try:
-                path, dur = await self.loop.run_in_executor(self.executor, self._synth, job)
-                if job["gen"] == self.gen and not self.skip_event.is_set():
-                    self.broadcast({"type": "speak", "id": job["id"], "url": "/audio/" + path.name,
-                                    "user": job["user"], "voice": job["voice_name"],
-                                    "voice_id": job.get("voice_id", ""),
-                                    "vol": job.get("vol", 1.0), "duration": dur})
-                    try:
-                        await asyncio.wait_for(self.skip_event.wait(), timeout=dur + 0.35)
-                        self.broadcast({"type": "stop"})
-                    except asyncio.TimeoutError:
-                        pass
-            except Exception as e:
-                log.exception("ошибка озвучки")
-                self.broadcast({"type": "tts_error", "id": job["id"], "error": str(e)})
-            self.broadcast({"type": "done", "id": job["id"]})
-            self.now = None
-            self.push_status()
-            self.cleanup_cache()
+    async def _synthesize_job(self, job):
+        """Синтез реплики в отдельном потоке: модель одна, работаем по очереди."""
+        return await self.loop.run_in_executor(self.executor, self._synth, job)
+
 
     # ---------- Twitch API ----------
     def api_ready(self):
@@ -849,15 +820,16 @@ class App:
         return self.brb_state()
 
     def skip(self):
-        self.skip_event.set()
+        self.queue.skip()
 
     def clear(self):
-        self.gen += 1
-        for job in self.pending:
-            self.broadcast({"type": "done", "id": job["id"]})
-        self.pending.clear()
-        self.skip()
-        self.push_status()
+        self.queue.clear()
+
+    def pause(self):
+        self.queue.pause()
+
+    def resume(self):
+        self.queue.resume()
 
     def cleanup_cache(self):
         limit = time.time() - 300
@@ -874,18 +846,17 @@ class App:
             await asyncio.sleep(1)
         self.push_status()
         self.broadcast({"type": "voices"})
-        self.wake.set()
+        self.queue.wake_up()
 
     async def startup(self):
         self.loop = asyncio.get_running_loop()
-        self.wake = asyncio.Event()
-        self.skip_event = asyncio.Event()
+        self.queue.start(self.loop)
         shutil.rmtree(TMP, ignore_errors=True)
         TMP.mkdir(exist_ok=True)
         threading.Thread(target=self.engine.load, daemon=True).start()
         self.start_rvc()
         self.detect_cosyvoice()
-        self.tasks = [asyncio.create_task(self.worker()),
+        self.tasks = [asyncio.create_task(self.queue.worker()),
                       asyncio.create_task(self.watch_engine()),
                       asyncio.create_task(self.poll_followers())]
         if self.settings["autoconnect"] and self.settings["channel"]:

@@ -158,10 +158,9 @@ async def api_control(state, request):
     elif action == "clear":
         a.clear()
     elif action == "pause":
-        a.paused = True
+        a.pause()
     elif action == "resume":
-        a.paused = False
-        a.wake.set()
+        a.resume()
     else:
         return fail("неизвестная команда", 404)
     a.push_status()

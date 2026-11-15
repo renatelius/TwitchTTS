@@ -1,0 +1,60 @@
+{
+  "steps": [
+    {
+      "step": "начало",
+      "state": {
+        "queue": 0,
+        "paused": false,
+        "now": false
+      }
+    },
+    {
+      "step": "пауза",
+      "state": {
+        "queue": 0,
+        "paused": true,
+        "now": false
+      }
+    },
+    {
+      "step": "три задания",
+      "state": {
+        "queue": 3,
+        "paused": true,
+        "now": false
+      }
+    },
+    {
+      "step": "очистка",
+      "state": {
+        "queue": 0,
+        "paused": true,
+        "now": false
+      }
+    },
+    {
+      "step": "одно задание",
+      "state": {
+        "queue": 1,
+        "paused": true,
+        "now": false
+      }
+    },
+    {
+      "step": "озвучка",
+      "state": {
+        "queue": 1,
+        "paused": false,
+        "now": true
+      }
+    },
+    {
+      "step": "пропуск",
+      "state": {
+        "queue": 0,
+        "paused": false,
+        "now": false
+      }
+    }
+  ]
+}
