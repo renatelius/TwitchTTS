@@ -55,7 +55,7 @@ class Synthesizer:
     мосты RVC и CosyVoice. Глобальных переменных нет.
     """
 
-    def __init__(self, engine, voices, settings, emotes, rvc, cosyvoice, ensure_cosyvoice):
+    def __init__(self, engine, voices, settings, emotes, rvc, cosyvoice, ensure_cosyvoice, lane=None):
         self.engine = engine
         self.voices = voices
         self.settings = settings
@@ -63,6 +63,7 @@ class Synthesizer:
         self.rvc = rvc
         self.cosyvoice = cosyvoice
         self.ensure_cosyvoice = ensure_cosyvoice
+        self.lane = lane              # полоса синтеза: одна задача за раз
         self.style_presets = {}      # подбор стилей под каждый голос
         self._presets_mtime = 0.0
         self._emote_cache = {}      # (голос, эмоция) -> сгенерированный звук
@@ -253,6 +254,22 @@ class Synthesizer:
 
     # ---------- очередь: синтез и проигрывание ----------
     def synthesize(self, job):
+        """Синтез задания.
+
+        Полоса синтеза даёт два правила: одновременно синтезируется только одна
+        реплика (две модели в видеопамяти не помещаются), а реплика чата важнее
+        предпрослушивания - не даёт ей ждать в очереди.
+        """
+        chat = (job.get("priority") or "chat") != "preview"
+        if self.lane is not None:
+            self.lane.acquire(chat=chat)
+        try:
+            return self._synthesize(job)
+        finally:
+            if self.lane is not None:
+                self.lane.release()
+
+    def _synthesize(self, job):
         out = CACHE / ("%s.wav" % uuid.uuid4().hex)
         sp = self.style_params(job.get("voice_id", ""),
                                job.get("style") or self.settings.get("style") or "")

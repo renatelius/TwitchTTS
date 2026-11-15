@@ -39,6 +39,7 @@ import features as featlib  # noqa: E402
 import chat_rules as chatrules  # noqa: E402
 import api as apilib  # noqa: E402
 import speak_queue as queuelib  # noqa: E402
+import synth_lane as synthlane  # noqa: E402
 import synthesis as synthmod  # noqa: E402
 from chat_rules import login_allowed, split_prefix, split_voice_prefix, voice_blocked  # noqa: E402
 import emotes as emotelib  # noqa: E402
@@ -82,14 +83,19 @@ class App:
         self.emotes = emotelib.EmoteSounds(ROOT / "sounds", OUT_SR,
                                            lambda p: (decode_audio(p), REF_SR))
         self.emotes.prepare_folders()
+        # Синтез всегда один за раз (полоса), но ждут разные очереди:
+        # реплики чата и предпрослушивание голосов не блокируют друг друга.
+        self.lane = synthlane.SynthLane()
+        self.executor = ThreadPoolExecutor(max_workers=1)        # очередь реплик чата
+        self.preview_executor = ThreadPoolExecutor(max_workers=1)  # предпрослушивание голосов
         # синтез живёт в отдельном модуле: app/synthesis.py
         self.synth = synthmod.Synthesizer(engine=self.engine, voices=self.voices,
                                           settings=self.settings, emotes=self.emotes,
                                           rvc=self.rvc, cosyvoice=self.cosyvoice,
-                                          ensure_cosyvoice=self.ensure_cosyvoice)
+                                          ensure_cosyvoice=self.ensure_cosyvoice,
+                                          lane=self.lane)
         self._train_done = False
         self.progress = ""
-        self.executor = ThreadPoolExecutor(max_workers=1)   # модель одна, работаем по очереди
         self.clients = set()
         self.history = deque(maxlen=150)
         self.queue = queuelib.SpeakQueue(synthesize=self._synthesize_job,
@@ -301,6 +307,14 @@ class App:
     async def _synthesize_job(self, job):
         """Синтез реплики в отдельном потоке: модель одна, работаем по очереди."""
         return await self.loop.run_in_executor(self.executor, self.synth.synthesize, job)
+
+    async def _preview_job(self, job):
+        """Синтез для предпрослушивания: отдельный поток, приоритет ниже чата.
+
+        Отдельный поток нужен, чтобы предпрослушивание не занимало место в
+        очереди реплик: иначе прослушивание голосов глушит озвучку чата.
+        """
+        return await self.loop.run_in_executor(self.preview_executor, self.synth.synthesize, job)
 
 
     # ---------- Twitch API ----------

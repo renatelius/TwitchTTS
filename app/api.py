@@ -197,9 +197,10 @@ async def api_preview(state, request):
         return fail("Голос не найден", 404)
     if a.engine.status != "ready":
         return fail("Модель озвучки ещё не готова")
-    job = {"text": text, "voice_id": voice["id"]}
+    # приоритет preview: реплики чата ждут меньше, чем предпрослушивание
+    job = {"text": text, "voice_id": voice["id"], "priority": "preview"}
     try:
-        path, _ = await a.loop.run_in_executor(a.executor, a.synth.synthesize, job)
+        path, _ = await a._preview_job(job)
     except Exception as e:
         log.exception("ошибка прослушивания")
         return fail("Ошибка озвучки: %s" % e, 500)
