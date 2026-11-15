@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 """Тесты очереди озвучки (app/speak_queue.py) без сервера и моделей.
 
-Проверяются: порядок реплик, пауза, очистка, пропуск и «поколение» заданий
-(после очистки начатая реплика не должна прозвучать).
+Проверяются: порядок реплик, пауза, очистка, пропуск, «поколение» заданий
+(после очистки начатая реплика не должна прозвучать) и предгенерация: пока
+звучит текущая реплика, следующая уже синтезируется.
 
     python tools/test_queue.py
 """
@@ -29,7 +30,7 @@ def check(name, cond, detail=""):
 
 async def wait_until(pred, timeout=3.0):
     deadline = asyncio.get_running_loop().time() + timeout
-    while asyncio.get_event_loop().time() < deadline:
+    while asyncio.get_running_loop().time() < deadline:
         if pred():
             return True
         await asyncio.sleep(0.01)
@@ -46,6 +47,7 @@ class Harness:
 
     def __init__(self, dur=0.05, ready=True):
         self.events = []
+        self.timeline = []      # (что, id) - по нему видно порядок
         self.dur = dur
         self.ready = ready
         self.gate = None
@@ -55,18 +57,24 @@ class Harness:
         self.queue.start(asyncio.get_running_loop())
 
     async def synth(self, j):
+        self.timeline.append(("synth", j["id"]))
         if self.gate is not None:
             await self.gate.wait()
         return (Path("cache_%s.wav" % j["id"]), self.dur)
 
     def broadcast(self, event):
         self.events.append(event)
+        if event.get("type") in ("speak", "stop", "done"):
+            self.timeline.append((event["type"], event.get("id")))
 
     def types(self):
         return [e["type"] for e in self.events]
 
     def speak_ids(self):
         return [e["id"] for e in self.events if e["type"] == "speak"]
+
+    def done_ids(self):
+        return [e["id"] for e in self.events if e["type"] == "done"]
 
 
 async def test_order():
@@ -107,11 +115,15 @@ async def test_clear():
     h.queue.enqueue(job("c2"))
     h.queue.clear()
     check("очередь пуста", h.queue.pending_len() == 0, h.queue.pending_len())
-    done = [e["id"] for e in h.events if e["type"] == "done"]
+    done = [e["id"] for e in self_events(h) if e["type"] == "done"]
     check("очищенные получили done", sorted(done) == ["c1", "c2"], done)
     await asyncio.sleep(0.2)
     check("очищенные не озвучились", h.speak_ids() == [], h.types())
     task.cancel()
+
+
+def self_events(h):
+    return h.events
 
 
 async def test_skip():
@@ -136,8 +148,9 @@ async def test_generation():
     h.gate = gate
     task = asyncio.ensure_future(h.queue.worker())
     h.queue.enqueue(job("g1"))
-    ok = await wait_until(lambda: h.queue.state()["now"] is not None)
-    check("задание взято в работу", ok, h.queue.state())
+    ok = await wait_until(lambda: ("synth", "g1") in h.timeline)
+    check("задание готовится", ok, h.timeline)
+    check("пока никто не играет", h.queue.state()["now"] is None, h.queue.state())
     h.queue.clear()
     gate.set()
     await asyncio.sleep(0.3)
@@ -161,9 +174,75 @@ async def test_not_ready():
     task.cancel()
 
 
+async def test_prefetch():
+    print("предгенерация: следующая реплика готовится, пока звучит текущая")
+    h = Harness(dur=3.0)
+    task = asyncio.ensure_future(h.queue.worker())
+    h.queue.enqueue(job("q0"))
+    ok = await wait_until(lambda: h.types().count("speak") == 1)
+    check("первая реплика зазвучала", ok, h.types())
+    h.queue.enqueue(job("q1"))
+    ok = await wait_until(lambda: ("synth", "q1") in h.timeline)
+    check("вторая реплика синтезируется заранее", ok, h.timeline)
+    check("счётчик очереди учитывает готовую реплику",
+          h.queue.state()["queue"] == 2, h.queue.state())
+    check("первая реплика ещё играет", h.queue.state()["now"] is not None
+          and h.queue.state()["now"]["id"] == "q0", h.queue.state())
+    ok = await wait_until(lambda: len(h.speak_ids()) == 2, timeout=8.0)
+    check("вторая реплика прозвучала", ok, h.types())
+    check("порядок сохранён", h.speak_ids() == ["q0", "q1"], h.speak_ids())
+    tl = h.timeline
+    i_speak0 = tl.index(("speak", "q0"))
+    i_synth1 = tl.index(("synth", "q1"))
+    i_done0 = tl.index(("done", "q0"))
+    check("синтез второй реплики случился до конца первой",
+          i_speak0 < i_synth1 < i_done0, tl)
+    task.cancel()
+
+
+async def test_clear_during_prefetch():
+    print("очистка во время предгенерации")
+    h = Harness(dur=1.0)
+    gate = asyncio.Event()
+    task = asyncio.ensure_future(h.queue.worker())
+    h.queue.enqueue(job("d0"))
+    ok = await wait_until(lambda: h.types().count("speak") == 1)
+    check("первая реплика зазвучала", ok, h.types())
+    h.gate = gate
+    h.queue.enqueue(job("d1"))
+    ok = await wait_until(lambda: ("synth", "d1") in h.timeline)
+    check("вторая реплика готовится", ok, h.timeline)
+    h.queue.clear()
+    gate.set()
+    ok = await wait_until(lambda: "d1" in h.done_ids(), timeout=5.0)
+    check("предготовленная реплика получила done", ok, h.done_ids())
+    check("предготовленная реплика не прозвучала", "d1" not in h.speak_ids(), h.speak_ids())
+    task.cancel()
+
+
+async def test_skip_with_prefetch():
+    print("пропуск при готовой следующей реплике")
+    h = Harness(dur=3.0)
+    task = asyncio.ensure_future(h.queue.worker())
+    h.queue.enqueue(job("k0"))
+    ok = await wait_until(lambda: h.types().count("speak") == 1)
+    check("первая реплика зазвучала", ok, h.types())
+    h.queue.enqueue(job("k1"))
+    ok = await wait_until(lambda: ("synth", "k1") in h.timeline)
+    check("вторая реплика готовится", ok, h.timeline)
+    h.queue.skip()
+    ok = await wait_until(lambda: "stop" in h.types())
+    check("пропуск остановил первую реплику", ok, h.types())
+    ok = await wait_until(lambda: len(h.speak_ids()) == 2, timeout=5.0)
+    check("готовая реплика прозвучала после пропуска", ok, h.types())
+    check("порядок сохранён", h.speak_ids() == ["k0", "k1"], h.speak_ids())
+    task.cancel()
+
+
 async def main():
     for test in (test_order, test_pause, test_clear, test_skip,
-                 test_generation, test_not_ready):
+                 test_generation, test_not_ready, test_prefetch,
+                 test_clear_during_prefetch, test_skip_with_prefetch):
         await test()
     print()
     if FAILS:
