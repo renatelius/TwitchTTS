@@ -142,6 +142,7 @@ check("без тегов нормализация не проверяется",
 
 # --- CosyVoice 3 берёт записи эмоций из sounds/ ---
 import main as appmod  # noqa: E402
+import synthesis as synthmod  # noqa: E402
 
 
 class _FakeEmotes:
@@ -161,19 +162,19 @@ class _Stub:
 
 segs_cosy = [("ru", "привет"), ("emote", "laugh"), ("ru", "как дела")]
 
-parts_clip = appmod.App._cosy_parts(_Stub({"laugh": [0.1, 0.2]}), segs_cosy, None)
+parts_clip = synthmod.Synthesizer.cosy_parts(_Stub({"laugh": [0.1, 0.2]}), segs_cosy, None)
 check("Cosy: запись из sounds/ отделяется от текста",
       [p[0] for p in parts_clip], ["text", "audio", "text"])
 check("Cosy: текст до записи без тега", parts_clip[0][1], "привет")
 check("Cosy: текст после записи без тега", parts_clip[2][1], "как дела")
 check("Cosy: запись на своём месте", parts_clip[1][1], [0.1, 0.2])
 
-parts_tag = appmod.App._cosy_parts(_Stub({}), segs_cosy, None)
+parts_tag = synthmod.Synthesizer.cosy_parts(_Stub({}), segs_cosy, None)
 check("Cosy: без записи - один текстовый кусок", [p[0] for p in parts_tag], ["text"])
 check("Cosy: без записи остаётся тег модели", parts_tag[0][1], "привет [laughter] как дела")
 check("Cosy: тег помечен как tagged", parts_tag[0][2], True)
 
-parts_two = appmod.App._cosy_parts(_Stub({"laugh": [1.0], "sigh": [2.0]}),
+parts_two = synthmod.Synthesizer.cosy_parts(_Stub({"laugh": [1.0], "sigh": [2.0]}),
                                     [("ru", "а"), ("emote", "laugh"), ("ru", "б"),
                                      ("emote", "sigh"), ("ru", "в")], None)
 check("Cosy: две записи - две части звука",

@@ -199,7 +199,7 @@ async def api_preview(state, request):
         return fail("Модель озвучки ещё не готова")
     job = {"text": text, "voice_id": voice["id"]}
     try:
-        path, _ = await a.loop.run_in_executor(a.executor, a._synth, job)
+        path, _ = await a.loop.run_in_executor(a.executor, a.synth.synthesize, job)
     except Exception as e:
         log.exception("ошибка прослушивания")
         return fail("Ошибка озвучки: %s" % e, 500)
@@ -220,7 +220,7 @@ async def api_announce(state, request):
         return fail("Модель озвучки ещё не готова", 503)
     job = {"text": text, "voice_id": voice["id"]}
     try:
-        path, dur = await a.loop.run_in_executor(a.executor, a._synth, job)
+        path, dur = await a.loop.run_in_executor(a.executor, a.synth.synthesize, job)
     except Exception as e:
         log.exception("ошибка озвучки")
         return fail("Ошибка озвучки: %s" % e, 500)
@@ -231,14 +231,14 @@ async def api_emotes(state, request):
     """Список эмоций, записи в sounds/ и счётчик звуков, сгенерированных голосом."""
     a = state
     return ok(enabled=bool(a.settings["emotes"]), folder=str(a.emotes.root),
-              emotes=a.emotes.summary(), generated=dict(a._emote_gen))
+              emotes=a.emotes.summary(), generated=a.synth.emote_stats())
 
 
 async def api_emotes_reset(state, request):
     """Сбрасывает кэш сгенерированных звуков - они будут созданы заново."""
     a = state
-    a._emote_cache.clear()
-    return ok(generated=dict(a._emote_gen))
+    a.synth.reset_emote_cache()
+    return ok(generated=a.synth.emote_stats())
 
 
 async def api_voices(state, request):
