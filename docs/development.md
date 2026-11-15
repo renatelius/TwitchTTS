@@ -36,6 +36,8 @@ venv\Scripts\python.exe tools\test_queue.py           # очередь озву�
 venv\Scripts\python.exe tools\test_synthesis.py       # модуль синтеза (без моделей)
 venv\Scripts\python.exe tools\bench_queue.py         # замер цикла очереди (нужен сервер)
 venv\Scripts\python.exe tools\ab_compare.py           # слепой A/B наборов качества (оффлайн)
+venv\Scripts\python.exe tools\profile_pipeline.py      # baseline конвейера через HTTP (нужен сервер)
+venv\Scripts\python.exe tools\profile_synthesis.py     # профиль XTTS по фазам (нужна видеокарта)
 venv\Scripts\python.exe tools\test_emotes.py         # эмоции и разбор текста
 venv\Scripts\python.exe tools\test_langs.py          # языки
 venv\Scripts\python.exe tools\audit_emotes.py        # сквозная проверка эмоций (нужен сервер)
@@ -132,6 +134,21 @@ nvidia-smi --query-gpu=memory.used,utilization.gpu --format=csv
 Полезно снимать: время первой фразы (прогрев модели), время обычной фразы,
 пиковую VRAM, утилизацию GPU, время ожидания в очереди. Сравнивать только
 в одинаковых условиях.
+
+Полный baseline конвейера (синтез по движкам, оверхед HTTP, отдача звука,
+загрузка GPU) снимается инструментом `tools/profile_pipeline.py`:
+
+```
+venv\Scripts\python.exe tools\profile_pipeline.py --base http://127.0.0.1:8765 --repeats 2 --out data\bench\perf.json
+```
+
+Он ходит только по публичному HTTP-интерфейсу, поэтому код приложения не нужно
+трогать. Раскладку XTTS по фазам (токенизация, генерация кодов GPT, вокодер)
+даёт `tools/profile_synthesis.py`: он поднимает тот же движок в отдельном
+процессе и снимает профиль Python — сервер для этого останавливать не нужно,
+но видеокарта должна быть свободна.
+
+Итог замеров: `docs/performance-baseline-2026-11-15.md`.
 
 Цикл очереди — от начала озвучки одной реплики до начала следующей — и есть
 главная метрика задержки:
