@@ -15,6 +15,8 @@ CLIP = os.path.join(SOUNDS, "laugh", "audit_tone.wav")
 TONE_HZ = 440.0
 TONE_SEC = 0.3
 TONE_AMP = 0.9
+# окно записи эмоции: запись идёт в начале фразы, пауза перед ней - 0.12 с
+CLIP_WINDOW = (0.05, 0.45)
 
 import atexit
 import shutil
@@ -83,23 +85,36 @@ def make_clip():
         w.writeframes(data)
 
 
-def tone_amplitude(wav_bytes):
-    """Амплитуда на частоте тона (Goertzel) в готовом wav."""
+def tone_amplitude(wav_bytes, window=None):
+    """Амплитуда на частоте тона (Goertzel) в готовом wav.
+
+    window - (начало, конец) в секундах: тон измеряется только в этом куске.
+    Без окна амплитуда тем слабее, чем длиннее произнесённая речь,
+    и проверка мигает на ровном месте.
+    """
     import io
     with wave.open(io.BytesIO(wav_bytes), "rb") as w:
         sr = w.getframerate()
         raw = w.readframes(w.getnframes())
-    n = len(raw) // 2
-    if n < 100:
+    total = len(raw) // 2
+    if total < 100:
         return 0.0, 0.0
-    samples = struct.unpack("<%dh" % n, raw[:n * 2])
+    samples = struct.unpack("<%dh" % total, raw[:total * 2])
+    dur = total / float(sr)
+    if window:
+        start = max(0, int(window[0] * sr))
+        stop = min(total, int(window[1] * sr))
+        samples = samples[start:stop]
+        if len(samples) < 100:
+            return 0.0, dur
+    n = len(samples)
     k = 2 * math.cos(2 * math.pi * TONE_HZ / sr)
     s1 = s2 = 0.0
     for x in samples:
         s0 = x / 32768.0 + k * s1 - s2
         s2, s1 = s1, s0
     amp = math.sqrt(max(0.0, s1 * s1 + s2 * s2 - k * s1 * s2)) / n * 2
-    return amp, n / float(sr)
+    return amp, dur
 
 
 def announce(text, voice_id=None):
@@ -135,8 +150,8 @@ try:
     wav, res = announce("(смех) привет", xtts["id"])
     check("озвучка с эмоцией синтезирована", wav is not None and len(wav) > 1000,
           res.get("error") or len(wav or b""))
-    amp, dur = tone_amplitude(wav) if wav else (0, 0)
-    check("запись смеха вклеена в речь (тон слышен в сигнале)", amp > 0.15,
+    amp, dur = tone_amplitude(wav, CLIP_WINDOW) if wav else (0, 0)
+    check("запись смеха вклеена в речь (тон слышен в сигнале)", amp > 0.3,
           "амплитуда %.3f, длительность %.2f с" % (amp, dur))
     check("длительность больше длины записи", dur > TONE_SEC, "%.2f с" % dur)
     gen1 = api("/api/emotes").get("generated", {}).get("laugh", 0)
@@ -162,7 +177,7 @@ gen2 = api("/api/emotes").get("generated", {}).get("laugh", 0)
 wav2, res2 = announce("(смех) привет", xtts["id"])
 check("без записи тоже озвучено (звук сгенерирован голосом)", wav2 is not None and len(wav2) > 1000,
       res2.get("error"))
-amp2, dur2 = tone_amplitude(wav2) if wav2 else (0, 0)
+amp2, dur2 = tone_amplitude(wav2, CLIP_WINDOW) if wav2 else (0, 0)
 check("тона записи нет - голосом сгенерирован другой звук", amp2 < 0.15, "амплитуда %.3f" % amp2)
 gen3 = api("/api/emotes").get("generated", {}).get("laugh", 0)
 check("звук эмоции сгенерирован голосом", gen3 > gen2, "счётчик %s -> %s" % (gen2, gen3))
