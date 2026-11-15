@@ -63,13 +63,15 @@
       <div class="kv"><span>Шаг D — настройки</span><b>1459ae8</b></div>
       <div class="kv"><span>Шаг E — цикл импортов</span><b>bfcfbc1</b></div>
       <div class="kv"><span>Шаг F — очередь озвучки</span><b>551413a</b></div>
+      <div class="kv"><span>Шаг G — синтез</span><b>ef2a9c7</b></div>
       <div class="kv"><span>Документация и ADR</span><b>8cdfc2c</b></div>
       <div class="kv"><span>Тест: мигающий аудит</span><b>dc145cd</b></div>
     </div>
     <div class="card"><h4>Масштаб</h4>
-      <div class="kv"><span>main.py было → стало</span><b>1730 → 930</b></div>
+      <div class="kv"><span>main.py было → стало</span><b>1730 → 661</b></div>
       <div class="kv"><span>app/api.py</span><b>631 строка</b></div>
       <div class="kv"><span>app/speak_queue.py</span><b>132 строки</b></div>
+      <div class="kv"><span>app/synthesis.py</span><b>329 строк</b></div>
       <div class="kv"><span>app/settings.py</span><b>настройки</b></div>
       <div class="kv"><span>app/chat_rules.py</span><b>229 строк</b></div>
     </div>
@@ -78,7 +80,7 @@
       <div class="kv"><span>Слепок HTTP</span><b>37 маршрутов / 25 запросов</b></div>
       <div class="kv"><span>Слепок настроек</span><b>26 случаев</b></div>
       <div class="kv"><span>Слепок очереди</span><b>7 шагов</b></div>
-      <div class="kv"><span>Наборов тестов</span><b>16 · провалов 0</b></div>
+      <div class="kv"><span>Наборов тестов</span><b>17 · провалов 0</b></div>
     </div>
   </div>
 
@@ -98,8 +100,9 @@
     <pre class="mermaid">
 graph TD
   UI["Браузер / OBS"] --> API["app/api.py<br/>633 строки - роуты, SSE"]
-  API --> APP["app/main.py<br/>930 строк - состояние, синтез"]
+  API --> APP["app/main.py<br/>661 строк - состояние"]
   APP --> Q["app/speak_queue.py<br/>очередь, skip, clear"]
+  APP --> SY2["app/synthesis.py<br/>синтез реплики"]
   APP --> CH["app/chat_rules.py<br/>решение: сказать / пропустить"]
   APP --> ST["app/settings.py<br/>настройки"]
   APP --> TW["Twitch API"]
@@ -162,9 +165,10 @@ graph LR
 
 <h2>3. Карта модулей сейчас</h2>
   <pre>app/
-  main.py         930  состояние, синтез, Twitch API, сборка приложения
+  main.py         661  состояние, Twitch API, сборка приложения
   api.py          631  HTTP: страницы, /api/*, SSE /events, отдача /audio      [новый]
   speak_queue.py 132  очередь озвучки: порядок, пауза, очистка, пропуск       [новый]
+  synthesis.py   329  синтез реплики: XTTS, RVC, CosyVoice, эмоции, стили    [новый]
   settings.py     120  настройки: defaults, загрузка, нормализация            [новый]
   emote_text.py   190  разбор ремарок и вокализация (текст, без звука)        [новый]
   textkeys.py      8  сравнение имён: norm_key                              [новый]
@@ -185,6 +189,7 @@ graph LR
   textproc -> emote_text, langs
   settings  -> -
   speak_queue -> -
+  synthesis -> engine, emotes, langs, paths, settings, styles, textproc
   main     -&gt; все остальные</pre>
   <div class="grid g2">
     <div class="card"><h4>Найдено при аудите</h4>
@@ -299,7 +304,7 @@ docs/               архитектура, контекст, ADR</pre>
     <tr><td>D</td><td>Настройки → <code>app/settings.py</code></td><td><code>Settings</code>, <code>apply(data)</code></td><td>слепок 26 случаев + юнит-тесты</td><td><span class="tag t-ok">готово</span></td></tr>
     <tr><td>E</td><td>Разрыв цикла <code>textproc ↔ emotes</code></td><td><code>emote_text</code>, <code>textkeys</code></td><td>граф импортов + живой чат</td><td><span class="tag t-ok">готово</span></td></tr>
     <tr><td>F</td><td>Очередь → <code>app/speak_queue.py</code></td><td><code>SpeakQueue: synthesize/broadcast/is_ready</code></td><td>слепок очереди + тесты очереди</td><td><span class="tag t-ok">готово</span></td></tr>
-    <tr><td>G</td><td>Синтез → <code>app/synthesis.py</code></td><td><code>synthesize(job)</code></td><td>контроль качества A/B</td><td><span class="tag t-acc">далее</span></td></tr>
+    <tr><td>G</td><td>Синтез → <code>app/synthesis.py</code></td><td><code>synthesize(job)</code></td><td>контроль качества A/B</td><td><span class="tag t-ok">готово</span></td></tr>
     <tr><td>H</td><td>Производительность и GPU</td><td>—</td><td>baseline до/после, VRAM, качество</td><td><span class="tag t-acc">отдельный этап</span></td></tr>
   </table>
   <p style="color:var(--dim)">Каждый шаг — отдельный коммит, поведение не меняется, тесты и слепки обязательны.</p>

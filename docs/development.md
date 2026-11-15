@@ -33,6 +33,7 @@ venv\Scripts\python.exe tools\test_settings.py       # нормализация 
 venv\Scripts\python.exe tools\test_api.py            # маршруты и связность модулей
 venv\Scripts\python.exe tools\test_imports.py        # циклы импортов и неопределённые имена
 venv\Scripts\python.exe tools\test_queue.py           # очередь озвучки (без сервера)
+venv\Scripts\python.exe tools\test_synthesis.py       # модуль синтеза (без моделей)
 venv\Scripts\python.exe tools\test_emotes.py         # эмоции и разбор текста
 venv\Scripts\python.exe tools\test_langs.py          # языки
 venv\Scripts\python.exe tools\audit_emotes.py        # сквозная проверка эмоций (нужен сервер)
