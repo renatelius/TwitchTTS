@@ -10,6 +10,7 @@ from pathlib import Path
 import numpy as np
 
 import langs
+import styles as stylelib
 
 
 def _setup_japanese():
@@ -195,7 +196,7 @@ class BaseEngine:
     def load_latents(self, path):
         raise NotImplementedError
 
-    def synthesize(self, segs, latents, out_path, speed=1.0, pitch=0.0):
+    def synthesize(self, segs, latents, out_path, speed=1.0, pitch=0.0, style=None):
         """segs: [(язык, текст) | ("audio", готовая запись с частотой OUT_SR)].
 
         Куски "audio" (записи эмоций: смех, вздох) вклеиваются между фразами как есть.
@@ -355,7 +356,11 @@ class XttsEngine(BaseEngine):
             wav = wav.detach().cpu().numpy()
         return np.asarray(wav, dtype=np.float32).reshape(-1)
 
-    def synthesize(self, segs, latents, out_path, speed=1.0, pitch=0.0):
+    def synthesize(self, segs, latents, out_path, speed=1.0, pitch=0.0, style=None):
+        sp = style or {}
+        speed = float(speed) * float(sp.get("speed") or 1.0)
+        pitch = float(pitch or 0) + float(sp.get("pitch") or 0)
+        temp = float(sp.get("temp") or 0.7)
         torch = self.torch
         parts = []
         gap = np.zeros(int(OUT_SR * 0.12), dtype=np.float32)
@@ -367,7 +372,7 @@ class XttsEngine(BaseEngine):
                     parts.append(gap)
                     continue
                 code = self.model_lang(lang)
-                wav = self._infer(code, text, latents, speed, 0.7)
+                wav = self._infer(code, text, latents, speed, temp)
                 if wav is None:
                     continue
                 if too_long(len(wav) / float(OUT_SR), text, code):
@@ -382,6 +387,7 @@ class XttsEngine(BaseEngine):
                 parts.append(shift_pitch(wav, OUT_SR, float(pitch or 0)))
                 parts.append(gap)
         audio = np.concatenate(parts[:-1]) if parts else np.zeros(1, dtype=np.float32)
+        audio = stylelib.post(audio, OUT_SR, sp)
         write_wav(out_path, audio, OUT_SR)
         return len(audio) / OUT_SR
 
@@ -410,7 +416,7 @@ class MockEngine(BaseEngine):
         with open(path, encoding="utf-8") as f:
             return {"freq": float(f.read())}
 
-    def synthesize(self, segs, latents, out_path, speed=1.0, pitch=0.0):
+    def synthesize(self, segs, latents, out_path, speed=1.0, pitch=0.0, style=None):
         parts = []
         for lang, text in segs:
             if lang == "audio":

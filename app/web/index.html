@@ -188,7 +188,19 @@
       <label for="s_me_voice">Голос для действий /me</label>
       <select id="s_me_voice"></select>
     </div>
+    <div class="field">
+      <label for="s_style">Стиль речи по умолчанию</label>
+      <select id="s_style">
+        <option value="">Нейтрально</option>
+        <option value="happy">Радостно</option>
+        <option value="sad">Грустно</option>
+        <option value="angry">Зло</option>
+        <option value="whisper">Шёпотом</option>
+        <option value="calm">Спокойно</option>
+      </select>
+    </div>
     <div class="hint">Зритель может выбрать голос для одного сообщения: <b>!!!#дудя привет</b> — сообщение прочитает голос «дудя». Префикс «!!!» в озвучке не читается.</div>
+    <div class="hint">Стиль меняется и в самом сообщении: <b>(радостно) привет</b>, <b>(зло) хватит</b>, <b>(шёпотом) тише</b>, <b>(грустно) …</b>. Ремарка стиля не читается.</div>
   </div>
 
   <div class="row" style="justify-content:flex-end; margin-top:20px">
@@ -415,7 +427,7 @@ async function loadEmotesInfo(){
 }
 
 const numeric = ['max_len', 'max_queue', 'cooldown'], bools = ['read_names', 'random_voice', 'skip_commands', 'skip_digits', 'skip_rewards', 'autoconnect', 'emotes', 'fix_layout'],
-      lists = ['ignore_users', 'blocked_words', 'blocked_voices', 'tts_allow', 'tts_deny'], selects = ['language', 'audience', 'me_voice'];
+      lists = ['ignore_users', 'blocked_words', 'blocked_voices', 'tts_allow', 'tts_deny'], selects = ['language', 'audience', 'me_voice', 'style'];
 $('settingsBtn').onclick = () => {
   numeric.concat(selects).forEach(k => $('s_' + k).value = settings[k] == null ? '' : settings[k]);
   $('s_tts_prefix').value = settings.tts_prefix || '';

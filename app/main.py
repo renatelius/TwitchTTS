@@ -36,6 +36,7 @@ from engine import OUT_SR, REF_SR, MockEngine, XttsEngine, write_wav  # noqa: E4
 import rvc as rvclib  # noqa: E402
 import cosyvoice as cvlib  # noqa: E402
 from textproc import clean_text, fix_layout, segments, strip_stress  # noqa: E402
+import styles as stylelib  # noqa: E402
 import emotes as emotelib  # noqa: E402
 import langs  # noqa: E402
 from twitch import TwitchChat, normalize_channel  # noqa: E402
@@ -103,6 +104,7 @@ DEFAULTS = {
     "cosyvoice_path": "",
     "tts_prefix": "",          # читать только сообщения с этим префиксом (пусто - все)
     "fix_layout": False,       # "Ghbdtn vbh" -> "Привет мир"
+    "style": "",               # стиль речи по умолчанию: happy/sad/angry/whisper/calm
     "me_voice": "",            # голос для действий /me (пусто - голос по умолчанию)
     "blocked_voices": [],      # голоса, которые зрители не могут выбрать
     "tts_allow": [],           # озвучивать только этих зрителей
@@ -347,6 +349,8 @@ class App:
         if s.get("fix_layout"):
             text = fix_layout(text)
         text = strip_stress(text)
+        # стиль речи: (радостно) привет - читаем радостно
+        style_key, speak_text = stylelib.match_style(text)
         event = {"type": "chat", "id": m["id"] or uuid.uuid4().hex, "user": m["name"],
                  "color": m["color"], "text": text, "tts": False, "note": ""}
         low = text.lower()
@@ -402,7 +406,7 @@ class App:
             self.broadcast(event)
             return
 
-        cleaned = self.clean(text, m["emotes"])
+        cleaned = self.clean(speak_text or text, m["emotes"])
         if not cleaned:
             event["note"] = "нечего читать"
             self.broadcast(event)
@@ -434,7 +438,7 @@ class App:
         event["voice"] = voice["name"]
         self.broadcast(event)
         speak = ("%s говорит: %s" % (m["name"].replace("_", " "), cleaned)) if s["read_names"] else cleaned
-        self.enqueue(event["id"], m["name"], speak, voice)
+        self.enqueue(event["id"], m["name"], speak, voice, style_key)
 
     def clean(self, text, emote_ranges=None, max_len=None):
         """Чистка текста с учётом настройки «эмоции»."""
@@ -498,9 +502,9 @@ class App:
             # не получилось - эмоция пропускается, слово не читается
         return out
 
-    def enqueue(self, msg_id, user, speak_text, voice):
+    def enqueue(self, msg_id, user, speak_text, voice, style=""):
         self.pending.append({"id": msg_id, "user": user, "text": speak_text, "voice_id": voice["id"],
-                             "voice_name": voice["name"],
+                             "voice_name": voice["name"], "style": style,
                              "vol": _vol_factor(voice.get("volume")),
                              "gen": self.gen})
         self.wake.set()
@@ -542,8 +546,9 @@ class App:
         flush()
         return parts
 
-    def _render_cosy(self, segs, voice, out_path):
-        """Синтез CosyVoice 3 с учётом записей эмоций из sounds/."""
+    def _render_cosy(self, segs, voice, out_path, style=None):
+        """Синтез CosyVoice 3 с учётом записей эмоций из sounds/ и стиля речи."""
+        sp = style or {}
         parts = self._cosy_parts(segs, voice)
         if not parts:
             raise ValueError("нечего читать")
@@ -551,8 +556,22 @@ class App:
         self.ensure_cosyvoice()
         if len(parts) == 1 and parts[0][0] == "text":
             text, tagged = parts[0][1], parts[0][2]
-            return self.cosyvoice.synthesize(text, prompt, prompt_text, out_path,
-                                             self.settings["speed"], tags=tagged)
+            tmp = CACHE / ("cv_%s.wav" % uuid.uuid4().hex)
+            try:
+                self.cosyvoice.synthesize(text, prompt, prompt_text, tmp,
+                                          self.settings["speed"] * float(sp.get("speed") or 1.0),
+                                          tags=tagged)
+                x = _read_samples(tmp, OUT_SR)
+            finally:
+                try:
+                    tmp.unlink()
+                except OSError:
+                    pass
+            if x is None or not len(x):
+                raise ValueError("нечего читать")
+            x = stylelib.post(x, OUT_SR, sp, do_pitch=True)
+            write_wav(out_path, x, OUT_SR)
+            return len(x) / float(OUT_SR)
         import numpy as np
         chunks = []
         for kind, val, tagged in parts:
@@ -562,7 +581,8 @@ class App:
             tmp = CACHE / ("cv_%s.wav" % uuid.uuid4().hex)
             try:
                 self.cosyvoice.synthesize(val, prompt, prompt_text, tmp,
-                                          self.settings["speed"], tags=tagged)
+                                          self.settings["speed"] * float(sp.get("speed") or 1.0),
+                                          tags=tagged)
                 x = _read_samples(tmp, OUT_SR)
                 if x is not None and len(x):
                     chunks.append(x)
@@ -580,12 +600,14 @@ class App:
                 joined.append(gap)
             joined.append(x)
         audio = np.concatenate(joined).astype(np.float32)
+        audio = stylelib.post(audio, OUT_SR, sp, do_pitch=True)
         write_wav(out_path, audio, OUT_SR)
         return len(audio) / float(OUT_SR)
 
     # ---------- очередь: синтез и проигрывание ----------
     def _synth(self, job):
         out = CACHE / ("%s.wav" % uuid.uuid4().hex)
+        sp = stylelib.params(job.get("style") or self.settings.get("style") or "")
         segs = segments(job["text"], self.settings["language"])
         latents = self.voices.latents(job["voice_id"])
         voice = self.voices.get(job["voice_id"])
@@ -594,7 +616,7 @@ class App:
             groups = langs.split_by_supported(segs, langs.COSY_LANGS)
             if len(groups) == 1 and groups[0][0]:
                 # CosyVoice 3 в режиме in-context: образец голоса + его точный текст
-                return out, self._render_cosy(segs, voice, out)
+                return out, self._render_cosy(segs, voice, out, sp)
             # Смешанный текст: CosyVoice 3 читает то, что умеет (китайский, русский,
             # английский), остальное уходит в XTTS - тембр остаётся тем же голосом.
             parts = []
@@ -603,14 +625,15 @@ class App:
                 try:
                     if is_cosy:
                         # CosyVoice 3 читает свой кусок (и записи эмоций из sounds/)
-                        self._render_cosy(group, voice, tmp)
+                        self._render_cosy(group, voice, tmp, sp)
                     else:
                         g = self.emotes.resolve(group, voice, self.settings["language"])
                         g = self.emote_segs(g, voice)
                         if not g:
                             continue
                         self.engine.synthesize(g, self.voices.latents(voice["id"]),
-                                               tmp, self.settings["speed"], 0.0)
+                                               tmp, self.settings["speed"] * sp["speed"],
+                                               sp["pitch"], style=sp)
                     x = _read_samples(tmp, OUT_SR)
                     if x is not None and len(x):
                         parts.append(x)
@@ -641,7 +664,8 @@ class App:
             # сначала читаем текст обычным голосом, потом RVC превращает его в голос персонажа
             pre = CACHE / ("pre_%s.wav" % uuid.uuid4().hex)
             try:
-                self.engine.synthesize(segs, latents, pre, self.settings["speed"], pitch)
+                self.engine.synthesize(segs, latents, pre, self.settings["speed"] * sp["speed"],
+                                       pitch + sp["pitch"], style=sp)
                 model, index = self.voices.model_files(voice["id"])
                 dur = self.rvc.convert(pre, out, model, index, voice["pitch"], voice["index_rate"])
             finally:
@@ -650,7 +674,8 @@ class App:
                 except OSError:
                     pass
         else:
-            dur = self.engine.synthesize(segs, latents, out, self.settings["speed"], pitch)
+            dur = self.engine.synthesize(segs, latents, out, self.settings["speed"] * sp["speed"],
+                                         pitch + sp["pitch"], style=sp)
         return out, dur
 
     async def worker(self):
@@ -871,7 +896,8 @@ async def api_say(request):
     """Проверочная фраза: идёт через общую очередь, как сообщение из чата."""
     a = app_state
     data = await body(request)
-    text = a.clean(str(data.get("text", "")))
+    style_key, raw_text = stylelib.match_style(str(data.get("text", "")))
+    text = a.clean(raw_text)
     if not text:
         return fail("Введите текст")
     voice = a.voices.get(str(data.get("voice", ""))) or a.default_voice()
@@ -882,7 +908,7 @@ async def api_say(request):
     event = {"type": "chat", "id": uuid.uuid4().hex, "user": "Проверка", "color": "#9aa4b2",
              "text": text, "tts": True, "note": "", "voice": voice["name"]}
     a.broadcast(event)
-    a.enqueue(event["id"], "Проверка", text, voice)
+    a.enqueue(event["id"], "Проверка", text, voice, style_key)
     return ok()
 
 
