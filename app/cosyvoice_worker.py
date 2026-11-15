@@ -75,6 +75,10 @@ def main():
 
     device = ("Видеокарта: " + torch.cuda.get_device_name(0)) if torch.cuda.is_available() else "Процессор"
     state = {"model": None, "whisper": None}
+    # Кэш образцов голоса: обработка образца (токены речи, фичи, эмбеддинг
+    # говорящего) занимает около секунды, а образец для голоса один и тот же.
+    # Ключ: путь и текст образца, время файла и режим нормализации текста.
+    spk_cache = {}
 
     def get_model():
         if state["model"] is None:
@@ -121,8 +125,30 @@ def main():
                 extra = {}
                 if req.get("tags") and not tags_survive(m, text):
                     extra["text_frontend"] = False
+                # Образец готовим один раз на голос и переиспользуем: иначе
+                # каждая фраза заново разбирает запись голоса (~1 с).
+                try:
+                    mtime = os.path.getmtime(prompt_wav)
+                except OSError:
+                    mtime = 0.0
+                normalize = bool(extra.get("text_frontend", True))
+                key = (prompt_wav, prompt_text, mtime, normalize)
+                spk_id = spk_cache.get(key)
+                if spk_id is None:
+                    spk_id = "spk_%d" % (len(spk_cache) + 1)
+                    prompt_for_cache = PREFIX + prompt_text
+                    if normalize:
+                        try:
+                            # тот же нормализованный текст, что и при синтезе без кэша
+                            prompt_for_cache = m.frontend.text_normalize(
+                                prompt_for_cache, split=False, text_frontend=True)
+                        except Exception:
+                            pass
+                    m.add_zero_shot_spk(prompt_for_cache, prompt_wav, spk_id)
+                    spk_cache[key] = spk_id
                 chunks = []
                 for res in m.inference_zero_shot(text, PREFIX + prompt_text, prompt_wav,
+                                                 zero_shot_spk_id=spk_id,
                                                  stream=False, speed=speed, **extra):
                     chunks.append(res["tts_speech"])
                 speech = torch.cat(chunks, dim=1)
