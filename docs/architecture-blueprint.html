@@ -176,6 +176,8 @@ graph LR
   twitch.py/twitch_api.py             чат Twitch и API (награды, подписчики)
   chat_rules -&gt; features, styles, textproc
   api       -&gt; cosyvoice, paths, rvc, rvc_train, styles, textproc, twitch, voices
+  emotes    -> emote_text, textkeys
+  textproc -> emote_text, langs
   settings  -> -
   main     -&gt; все остальные</pre>
   <div class="grid g2">
