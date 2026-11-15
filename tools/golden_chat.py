@@ -20,6 +20,7 @@ APP = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 
 sys.path.insert(0, APP)
 
 import main as appmod   # noqa: E402
+import settings as settingsmod  # noqa: E402
 
 
 class FakeVoices:
@@ -160,7 +161,7 @@ def snapshot(app, message):
 
 def build_snapshot():
     """Слепок решений по всем случаям. Порядок и содержимое должны быть стабильны."""
-    base = dict(appmod.DEFAULTS)
+    base = dict(settingsmod.DEFAULTS)
     base["channel"] = "test"
     result = []
     for name, override, message in CASES:

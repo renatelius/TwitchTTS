@@ -16,6 +16,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import chat_rules as chatrules   # noqa: E402
 import golden_chat                # noqa: E402
 import main as appmod             # noqa: E402
+import settings as settingsmod     # noqa: E402
 
 FAILED = []
 
@@ -28,7 +29,7 @@ def check(name, got, want):
                              got if ok else "got=%r want=%r" % (got, want)))
 
 
-BASE = dict(appmod.DEFAULTS)
+BASE = dict(settingsmod.DEFAULTS)
 BASE["channel"] = "test"
 
 

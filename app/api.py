@@ -124,32 +124,7 @@ async def api_settings(state, request):
     a = state
     data = await body(request)
     was_muted = bool(a.settings.get("muted"))
-    for key, default in state.defaults.items():
-        if key not in data or key in ("channel", "disabled_voices", "applio_path", "cosyvoice_path"):
-            continue
-        val = data[key]
-        try:
-            if isinstance(default, bool):
-                val = bool(val)
-            elif isinstance(default, int):
-                val = max(0, min(int(val), 2000))
-            elif isinstance(default, float):
-                val = float(val)
-            elif isinstance(default, list):
-                val = [str(x).strip() for x in val if str(x).strip()][:200]
-            elif isinstance(default, dict):
-                if not isinstance(val, dict):
-                    continue
-                val = {str(k)[:40]: str(v)[:40] for k, v in list(val.items())[:50]}
-            else:
-                val = str(val)
-        except (TypeError, ValueError):
-            continue
-        a.settings[key] = val
-    a.settings["speed"] = max(0.7, min(a.settings["speed"], 1.5))
-    a.settings["volume"] = max(0.0, min(a.settings["volume"], 2.0))
-    a.settings["max_len"] = max(20, min(a.settings["max_len"], 500))
-    a.settings["max_queue"] = max(1, min(a.settings["max_queue"], 100))
+    a.settings.apply(data)
     a.save_settings()
     if a.settings.get("muted") and not was_muted:
         # мьют: замолкаем сразу - текущая реплика и вся очередь

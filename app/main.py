@@ -30,6 +30,7 @@ except Exception:  # очень старые версии Starlette - работ
 
 
 from paths import APP_DIR, ROOT, DATA, CACHE, TMP, WEB  # noqa: E402
+from settings import Settings, load_json  # noqa: E402
 from engine import OUT_SR, REF_SR, MockEngine, XttsEngine, write_wav  # noqa: E402
 import rvc as rvclib  # noqa: E402
 import cosyvoice as cvlib  # noqa: E402
@@ -79,66 +80,9 @@ def _read_samples(path, target_sr=OUT_SR):
     return x
 
 
-DEFAULTS = {
-    "channel": "",
-    "autoconnect": True,
-    "default_voice": "",
-    "random_voice": False,     # зрителям без выбранного голоса давать постоянный случайный
-    "volume": 0.9,           # 0.0 - 2.0 (0-200 %)
-    "muted": False,          # мьют озвучки чата: реплики не читаются
-    "speed": 1.0,
-    "language": "auto",        # auto | ru | en
-    "max_len": 200,
-    "max_queue": 15,
-    "cooldown": 0,             # секунд между сообщениями одного зрителя
-    "audience": "all",         # all | subs (подписчики, VIP, модераторы)
-    "read_names": False,
-    "skip_commands": True,
-    "skip_digits": True,       # не читать сообщения из одних цифр (голоса в опросах)
-    "skip_rewards": True,      # не читать сообщения наград за баллы канала
-    "emotes": True,            # (смех), *вздыхает* - звучат как эмоция, а не читаются словом
-    "ignore_users": ["nightbot", "streamelements", "moobot", "fossabot", "streamlabs", "wizebot"],
-    "blocked_words": [],
-    "disabled_voices": [],
-    "applio_path": "",
-    "cosyvoice_path": "",
-    "tts_prefix": "",          # читать только сообщения с этим префиксом (пусто - все)
-    "fix_layout": False,       # "Ghbdtn vbh" -> "Привет мир"
-    "style": "",               # стиль речи по умолчанию: happy/sad/angry/whisper/calm
-    "me_voice": "",            # голос для действий /me (пусто - голос по умолчанию)
-    "blocked_voices": [],      # голоса, которые зрители не могут выбрать
-    "tts_allow": [],           # озвучивать только этих зрителей
-    "tts_deny": [],            # не озвучивать этих зрителей
-    "player_only": False,      # звук только на странице-плеере (для OBS)
-    "highlight_rewards": False,  # выделять сообщения, отправленные за награду
-    "event_rules": {},         # правила по событиям: рейд/подписка/битсы -> announce|speak|ignore
-    "brb_seconds": 0,          # таймер BRB-экрана, секунд
-    "brb_message": "Скоро вернусь",
-    "twitch_client_id": "",     # Client ID приложения Twitch (нужен для API)
-    "twitch_token": "",         # OAuth-токен Twitch: модератора или стримера
-    "highlight_reward": "",     # название награды, сообщения из которой выделяются
-    "speak_reward": "",         # название награды, сообщения из которой озвучиваются
-    "follow_rule": "ignore",    # реакция на нового подписчика: ignore|announce|speak
-}
-
-def load_json(path, default):
-    try:
-        return json.loads(Path(path).read_text(encoding="utf-8"))
-    except Exception:
-        return default
-
-
-def save_json(path, data):
-    tmp = Path(str(path) + ".tmp")
-    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-    os.replace(tmp, path)
-
-
 class App:
     def __init__(self):
-        self.settings = dict(DEFAULTS)
-        self.defaults = DEFAULTS          # значения по умолчанию для настроек
-        self.settings.update({k: v for k, v in load_json(DATA / "settings.json", {}).items() if k in DEFAULTS})
+        self.settings = Settings(DATA / "settings.json")
         self.user_voices = load_json(DATA / "user_voices.json", {})
         self.style_presets = {}      # подбор стилей под каждый голос
         self._presets_mtime = 0.0
@@ -277,7 +221,7 @@ class App:
         self.cosyvoice.start(path)
 
     def save_settings(self):
-        save_json(DATA / "settings.json", self.settings)
+        self.settings.save()
 
     # ---------- голоса ----------
     def default_voice(self):

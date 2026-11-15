@@ -11,6 +11,7 @@ sys.path.insert(0, APP)
 import features as featlib     # noqa: E402
 import chat_rules as chatrules  # noqa: E402
 import main as appmod           # noqa: E402
+import settings as settingsmod   # noqa: E402
 
 FAILED = []
 
@@ -76,7 +77,7 @@ check("BRB: '5 минут попить'", featlib.parse_brb("5 минут поп
 
 # --- приложение ---
 for key in ("player_only", "highlight_rewards", "event_rules", "brb_seconds", "brb_message"):
-    check("настройка есть: " + key, key in appmod.DEFAULTS, True)
+    check("настройка есть: " + key, key in settingsmod.DEFAULTS, True)
 
 app = appmod.App()
 app.save_settings = lambda: None      # тест не должен трогать настоящие настройки
