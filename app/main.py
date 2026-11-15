@@ -35,7 +35,7 @@ from starlette.staticfiles import StaticFiles  # noqa: E402
 from engine import OUT_SR, REF_SR, MockEngine, XttsEngine, write_wav  # noqa: E402
 import rvc as rvclib  # noqa: E402
 import cosyvoice as cvlib  # noqa: E402
-from textproc import clean_text, segments  # noqa: E402
+from textproc import clean_text, fix_layout, segments, strip_stress  # noqa: E402
 import emotes as emotelib  # noqa: E402
 import langs  # noqa: E402
 from twitch import TwitchChat, normalize_channel  # noqa: E402
@@ -101,7 +101,56 @@ DEFAULTS = {
     "disabled_voices": [],
     "applio_path": "",
     "cosyvoice_path": "",
+    "tts_prefix": "",          # читать только сообщения с этим префиксом (пусто - все)
+    "fix_layout": False,       # "Ghbdtn vbh" -> "Привет мир"
+    "me_voice": "",            # голос для действий /me (пусто - голос по умолчанию)
+    "blocked_voices": [],      # голоса, которые зрители не могут выбрать
+    "tts_allow": [],           # озвучивать только этих зрителей
+    "tts_deny": [],            # не озвучивать этих зрителей
 }
+
+def voice_blocked(settings, voice):
+    """Голос запрещён для зрителей (список «Запрещённые голоса»)."""
+    names = {str(x).strip().lower() for x in (settings.get("blocked_voices") or []) if str(x).strip()}
+    if not names or not voice:
+        return False
+    return (str(voice.get("name", "")).strip().lower() in names
+            or str(voice.get("id", "")) in names)
+
+
+def login_allowed(settings, login):
+    """Кого озвучивать: список «только своих» и список «не озвучивать»."""
+    lg = str(login or "").strip().lower()
+    deny = {str(x).strip().lower() for x in (settings.get("tts_deny") or []) if str(x).strip()}
+    allow = {str(x).strip().lower() for x in (settings.get("tts_allow") or []) if str(x).strip()}
+    if lg and lg in deny:
+        return False
+    if allow and lg not in allow:
+        return False
+    return True
+
+
+def split_prefix(text, prefix):
+    """Отделить префикс озвучки от текста: ("привет", "!!!") или ("привет", "").
+
+    Префикс задаёт стример (например "!!!"): такие сообщения озвучиваются
+    голосом зрителя, а сам префикс не читается.
+    """
+    if not prefix:
+        return text, ""
+    p = prefix.strip()
+    if text.lower().startswith(p.lower()):
+        return text[len(p):].strip(), p
+    return text, ""
+
+
+def split_voice_prefix(text):
+    """«!!!#дудя привет» -> («дудя», «привет»). Голос только для этого сообщения."""
+    if not text.startswith("!!!#"):
+        return "", text
+    head, _, tail = text[4:].partition(" ")
+    return head.strip(), tail.strip()
+
 
 for d in (DATA, CACHE, TMP):
     d.mkdir(parents=True, exist_ok=True)
@@ -272,7 +321,7 @@ class App:
         enabled = self.voices.enabled()
         chosen = self.user_voices.get(login)
         for v in enabled:
-            if v["id"] == chosen:
+            if v["id"] == chosen and not voice_blocked(self.settings, v):
                 return v
         if self.settings["random_voice"] and enabled:
             n = int(hashlib.md5(login.encode()).hexdigest(), 16)
@@ -283,14 +332,37 @@ class App:
     def on_chat(self, m):
         s = self.settings
         text = m["text"].strip()
+        # действие /me - отдельный голос, префикс не читается
+        is_me = text.lower().startswith("/me ")
+        if is_me:
+            text = text[4:].strip()
+        # голос только для этого сообщения: !!!#дудя привет
+        one_voice, rest_text = split_voice_prefix(text)
+        # префикс озвучки (например "!!!"): без него сообщение не читается
+        prefix = str(s.get("tts_prefix") or "").strip()
+        text, used_prefix = split_prefix(text, prefix)
+        no_prefix = bool(prefix) and not used_prefix
+        if one_voice:
+            text = rest_text
+        if s.get("fix_layout"):
+            text = fix_layout(text)
+        text = strip_stress(text)
         event = {"type": "chat", "id": m["id"] or uuid.uuid4().hex, "user": m["name"],
                  "color": m["color"], "text": text, "tts": False, "note": ""}
         low = text.lower()
         first, _, rest = low.partition(" ")
 
-        if first in ("!г", "!голос", "!voice"):
+        if first in ("!г", "!голос", "!voice", "!tts", "!ттс"):
             self.broadcast(event)
+            if not rest.strip() or rest.strip().lower() in ("default", "сброс", "по умолчанию"):
+                self.user_voices.pop(m["login"], None)
+                save_json(DATA / "user_voices.json", self.user_voices)
+                self.broadcast({"type": "note", "text": "%s снова говорит голосом канала" % m["name"]})
+                return
             voice = self.voices.resolve(rest)
+            if voice and voice_blocked(s, voice):
+                self.broadcast({"type": "note", "text": "%s: голос «%s» запрещён" % (m["name"], voice["name"])})
+                return
             if voice:
                 self.user_voices[m["login"]] = voice["id"]
                 save_json(DATA / "user_voices.json", self.user_voices)
@@ -306,8 +378,12 @@ class App:
         note = ""
         if s.get("muted"):
             note = "озвучка выключена"
+        elif no_prefix:
+            note = "без префикса"
         elif m["login"] in [u.lower() for u in s["ignore_users"]]:
             note = "бот"
+        elif not login_allowed(s, m["login"]):
+            note = "не озвучивать этого зрителя"
         elif text.startswith("!") and s["skip_commands"]:
             note = "команда"
         elif s["skip_digits"] and text.strip().isdigit():
@@ -336,6 +412,19 @@ class App:
             self.broadcast(event)
             return
         voice = self.voice_for(m["login"])
+        if is_me and s.get("me_voice"):
+            mv = self.voices.get(s["me_voice"])
+            if mv and mv.get("enabled"):
+                voice = mv
+        if one_voice:
+            if one_voice.lower() in ("random", "случайный", "рандом"):
+                pool = self.voices.enabled()
+                if pool:
+                    voice = pool[int(time.time() * 1000) % len(pool)]
+            else:
+                picked = self.voices.resolve(one_voice)
+                if picked:
+                    voice = picked
         if not voice:
             event["note"] = "нет голосов"
             self.broadcast(event)

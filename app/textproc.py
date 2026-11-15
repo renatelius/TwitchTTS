@@ -248,3 +248,46 @@ def norm_key(name):
     """Ключ для сравнения имён голосов: без регистра, пробелов и ё."""
     name = name.lower().replace("ё", "е")
     return re.sub(r"[^0-9a-zа-я]", "", name)
+
+
+# ---------- раскладка и ударения ----------
+LAYOUT_EN = "qwertyuiop[]asdfghjkl;'zxcvbnm,."
+LAYOUT_RU = "йцукенгшщзхъфывапролджэячсмитьбю."
+_VOWELS = set("aeiouy")
+
+
+def fix_layout(text):
+    """«Ghbdtn vbh» -> «Привет мир»: русский текст, набранный в английской раскладке.
+
+    Переводится только сообщение целиком без кириллицы, а внутри - слово
+    целиком из латиницы без гласных (a, e, i, o, u, y) и с тремя и более
+    разными «русскими» буквами. Английские слова так не ломаются.
+    """
+    if not text or any("\u0400" <= ch <= "\u04ff" for ch in text):
+        return text
+    out = []
+    for word in re.split(r"(\W+)", text):
+        if len(word) >= 3 and word.isalpha() and word.isascii():
+            low = word.lower()
+            if (not set(low) & _VOWELS
+                    and len(set(low) & set("bdfghjklmnpqrstvwxz")) >= 3):
+                conv = []
+                for ch in word:
+                    c = ch.lower()
+                    r = LAYOUT_RU[LAYOUT_EN.index(c)] if c in LAYOUT_EN else c
+                    conv.append(r.upper() if ch.isupper() else r)
+                out.append("".join(conv))
+                continue
+        out.append(word)
+    return "".join(out)
+
+
+def strip_stress(text):
+    """«т+орты» -> «торты»: знак ударения принимается и снимается.
+
+    Синтезаторы не понимают «+», но зритель может отметить ударение -
+    слово читается как обычно, без лишнего «плюс» в озвучке.
+    """
+    if not text or "+" not in text:
+        return text
+    return re.sub(r"\s*\+\s*", "", text)

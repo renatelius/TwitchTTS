@@ -163,6 +163,32 @@
       <label for="s_blocked_words">Запрещённые слова — сообщение с ними не читается (через запятую)</label>
       <input type="text" id="s_blocked_words">
     </div>
+    <div class="field">
+      <label for="s_blocked_voices">Запрещённые голоса — зрители не смогут их выбрать (через запятую)</label>
+      <input type="text" id="s_blocked_voices">
+    </div>
+    <div class="field">
+      <label for="s_tts_allow">Озвучивать только этих зрителей (через запятую, пусто — всех)</label>
+      <input type="text" id="s_tts_allow">
+    </div>
+    <div class="field">
+      <label for="s_tts_deny">Не озвучивать этих зрителей (через запятую)</label>
+      <input type="text" id="s_tts_deny">
+    </div>
+  </div>
+
+  <div class="settings-group">
+    <div class="group-title">Текст и действия</div>
+    <label class="check"><input type="checkbox" id="s_fix_layout"> Чинить раскладку: «Ghbdtn vbh» → «Привет мир»</label>
+    <div class="field" style="margin-top:12px">
+      <label for="s_tts_prefix">Префикс озвучки — читать только сообщения с ним (пусто — все)</label>
+      <input type="text" id="s_tts_prefix" placeholder="например !!!">
+    </div>
+    <div class="field">
+      <label for="s_me_voice">Голос для действий /me</label>
+      <select id="s_me_voice"></select>
+    </div>
+    <div class="hint">Зритель может выбрать голос для одного сообщения: <b>!!!#дудя привет</b> — сообщение прочитает голос «дудя». Префикс «!!!» в озвучке не читается.</div>
   </div>
 
   <div class="row" style="justify-content:flex-end; margin-top:20px">
@@ -309,6 +335,13 @@ function renderVoices() {
   }
   if (!on.length) sel.append(new Option(st.engine && st.engine.status === 'ready' ? 'нет голосов' : 'модель загружается…', ''));
   if (on.some(v => v.id === settings.default_voice)) sel.value = settings.default_voice;
+  // отдельный голос для /me
+  const me = $('s_me_voice');
+  if (me) {
+    me.replaceChildren(new Option('Как голос по умолчанию', ''));
+    for (const v of on) me.append(new Option(v.name, v.id));
+    me.value = settings.me_voice || '';
+  }
 }
 async function loadAll() {
   const r = await api('/api/state');
@@ -381,10 +414,11 @@ async function loadEmotesInfo(){
   }catch(e){}
 }
 
-const numeric = ['max_len', 'max_queue', 'cooldown'], bools = ['read_names', 'random_voice', 'skip_commands', 'skip_digits', 'skip_rewards', 'autoconnect', 'emotes'],
-      lists = ['ignore_users', 'blocked_words'], selects = ['language', 'audience'];
+const numeric = ['max_len', 'max_queue', 'cooldown'], bools = ['read_names', 'random_voice', 'skip_commands', 'skip_digits', 'skip_rewards', 'autoconnect', 'emotes', 'fix_layout'],
+      lists = ['ignore_users', 'blocked_words', 'blocked_voices', 'tts_allow', 'tts_deny'], selects = ['language', 'audience', 'me_voice'];
 $('settingsBtn').onclick = () => {
-  numeric.concat(selects).forEach(k => $('s_' + k).value = settings[k]);
+  numeric.concat(selects).forEach(k => $('s_' + k).value = settings[k] == null ? '' : settings[k]);
+  $('s_tts_prefix').value = settings.tts_prefix || '';
   bools.forEach(k => $('s_' + k).checked = settings[k]);
   lists.forEach(k => $('s_' + k).value = settings[k].join(', '));
   $('s_speed').value = Math.round(settings.speed * 100); $('speedVal').textContent = settings.speed.toFixed(2) + '×';
@@ -399,6 +433,7 @@ $('dlgSave').onclick = async () => {
   selects.forEach(k => d[k] = $('s_' + k).value);
   bools.forEach(k => d[k] = $('s_' + k).checked);
   lists.forEach(k => d[k] = $('s_' + k).value.split(',').map(x => x.trim()).filter(Boolean));
+  d.tts_prefix = $('s_tts_prefix').value.trim();
   await api('/api/settings', d);
   $('dlg').close();
 };
