@@ -126,7 +126,8 @@ graph TD
   APP2 --> TW2["app/twitch_api.py<br/>награды, фоллы, таймаут"]
   APP2 --> QU["app/speak_queue.py<br/>очередь, skip, clear"]
   APP2 --> SY["app/synthesis.py<br/>синтез"]
-  SY --> ENG["engine / rvc / cosyvoice"]
+  SY --> LN["app/synth_lane.py<br/>полоса: 1 задача, приоритет чата"]
+  LN --> ENG["engine / rvc / cosyvoice"]
   classDef deep fill:#064e3b,stroke:#34d399,color:#fff
   class CH2,SY,ST2,QU deep
     </pre>
@@ -171,7 +172,8 @@ graph LR
   main.py         661  состояние, Twitch API, сборка приложения
   api.py          631  HTTP: страницы, /api/*, SSE /events, отдача /audio      [новый]
   speak_queue.py 221  очередь озвучки: порядок, пауза, очистка, пропуск, предгенерация  [новый]
-  synthesis.py   328  синтез реплики: XTTS, RVC, CosyVoice, эмоции, стили    [новый]
+  synthesis.py   345  синтез реплики: XTTS, RVC, CosyVoice, эмоции, стили    [новый]
+  synth_lane.py   51  полоса синтеза: одна задача за раз, приоритет чата    [новый]
   settings.py     133  настройки: defaults, загрузка, нормализация, маска секретов  [новый]
   emote_text.py   163  разбор ремарок и вокализация (текст, без звука)        [новый]
   textkeys.py      12  сравнение имён: norm_key                              [новый]
@@ -322,6 +324,7 @@ docs/               архитектура, контекст, ADR</pre>
     <tr><td>F</td><td>Очередь → <code>app/speak_queue.py</code></td><td><code>SpeakQueue: synthesize/broadcast/is_ready</code></td><td>слепок очереди + тесты очереди</td><td><span class="tag t-ok">готово</span></td></tr>
     <tr><td>G</td><td>Синтез → <code>app/synthesis.py</code></td><td><code>synthesize(job)</code></td><td>контроль качества A/B</td><td><span class="tag t-ok">готово</span></td></tr>
     <tr><td>H</td><td>Скорость: предгенерация следующей реплики</td><td><code>_maybe_prefetch</code></td><td>A/B замер цикла + слепое прослушивание</td><td><span class="tag t-ok">готово</span> <span class="num">1ff6fe3</span></td></tr>
+    <tr><td>H-4</td><td>Прослушивание голосов: очередь + полоса синтеза</td><td><code>pvLoop</code>, <code>SynthLane</code></td><td>28 голосов в браузере, приоритет чата</td><td><span class="tag t-ok">готово</span> <span class="num">0e66f8a</span></td></tr>
   </table>
   <p style="color:var(--dim)">Каждый шаг — отдельный коммит, поведение не меняется, тесты и слепки обязательны.</p>
 

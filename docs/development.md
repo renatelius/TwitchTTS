@@ -29,6 +29,7 @@ venv\Scripts\python.exe tools\test_features.py       # курс, перевод,
 venv\Scripts\python.exe tools\test_features2.py      # команды чата, префиксы, голоса
 venv\Scripts\python.exe tools\test_features3.py      # Twitch API: награды, подписчики, таймаут
 venv\Scripts\python.exe tools\test_chat_rules.py     # таблица правил чата
+venv\Scripts\python.exe tools\test_synth_lane.py    # полоса синтеза: приоритеты
 venv\Scripts\python.exe tools\test_settings.py       # нормализация настроек
 venv\Scripts\python.exe tools\test_api.py            # маршруты и связность модулей
 venv\Scripts\python.exe tools\test_imports.py        # циклы импортов и неопределённые имена
@@ -148,6 +149,18 @@ venv\Scripts\python.exe tools\profile_pipeline.py --base http://127.0.0.1:8765 -
 даёт `tools/profile_synthesis.py`: он поднимает тот же движок в отдельном
 процессе и снимает профиль Python — сервер для этого останавливать не нужно,
 но видеокарта должна быть свободна.
+
+
+Прослушивание голосов на странице «Голоса» замеряется отдельно:
+
+```
+venv\Scripts\python.exe tools\measure_preview.py --count 8 --out data\bench\preview.json
+venv\Scripts\python.exe tools\check_preview_vs_chat.py --base http://127.0.0.1:8765 --count 8
+```
+
+Первый скрипт меряет, сколько стоит предпрослушивание и как ведёт себя очередь;
+второй - не глушит ли предпрослушивание озвучку чата (реплика должна прозвучать
+за секунды, а не после всех голосов).
 
 Итог замеров: `docs/performance-baseline-2026-11-15.md`.
 
