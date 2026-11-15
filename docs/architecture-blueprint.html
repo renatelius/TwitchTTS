@@ -62,20 +62,23 @@
       <div class="kv"><span>Шаг B — HTTP-слой</span><b>4f89273</b></div>
       <div class="kv"><span>Шаг D — настройки</span><b>1459ae8</b></div>
       <div class="kv"><span>Шаг E — цикл импортов</span><b>bfcfbc1</b></div>
+      <div class="kv"><span>Шаг F — очередь озвучки</span><b>551413a</b></div>
       <div class="kv"><span>Документация и ADR</span><b>8cdfc2c</b></div>
       <div class="kv"><span>Тест: мигающий аудит</span><b>dc145cd</b></div>
     </div>
     <div class="card"><h4>Масштаб</h4>
-      <div class="kv"><span>main.py было → стало</span><b>1730 → 960</b></div>
-      <div class="kv"><span>app/api.py</span><b>633 строки</b></div>
+      <div class="kv"><span>main.py было → стало</span><b>1730 → 930</b></div>
+      <div class="kv"><span>app/api.py</span><b>631 строка</b></div>
+      <div class="kv"><span>app/speak_queue.py</span><b>132 строки</b></div>
       <div class="kv"><span>app/settings.py</span><b>настройки</b></div>
-      <div class="kv"><span>app/chat_rules.py</span><b>230 строк</b></div>
+      <div class="kv"><span>app/chat_rules.py</span><b>229 строк</b></div>
     </div>
     <div class="card"><h4>Страховка</h4>
       <div class="kv"><span>Слепок чата</span><b>47/47</b></div>
       <div class="kv"><span>Слепок HTTP</span><b>37 маршрутов / 25 запросов</b></div>
       <div class="kv"><span>Слепок настроек</span><b>26 случаев</b></div>
-      <div class="kv"><span>Наборов тестов</span><b>15 · провалов 0</b></div>
+      <div class="kv"><span>Слепок очереди</span><b>7 шагов</b></div>
+      <div class="kv"><span>Наборов тестов</span><b>16 · провалов 0</b></div>
     </div>
   </div>
 
@@ -95,7 +98,8 @@
     <pre class="mermaid">
 graph TD
   UI["Браузер / OBS"] --> API["app/api.py<br/>633 строки - роуты, SSE"]
-  API --> APP["app/main.py<br/>960 строк - состояние, очередь, синтез"]
+  API --> APP["app/main.py<br/>930 строк - состояние, синтез"]
+  APP --> Q["app/speak_queue.py<br/>очередь, skip, clear"]
   APP --> CH["app/chat_rules.py<br/>решение: сказать / пропустить"]
   APP --> ST["app/settings.py<br/>настройки"]
   APP --> TW["Twitch API"]
@@ -114,7 +118,7 @@ graph TD
   APP2 --> CH2["app/chat_rules.py<br/>решение: сказать / пропустить"]
   APP2 --> ST2["app/settings.py<br/>настройки"]
   APP2 --> TW2["app/twitch_api.py<br/>награды, фоллы, таймаут"]
-  APP2 --> QU["app/queue.py<br/>очередь, skip, clear"]
+  APP2 --> QU["app/speak_queue.py<br/>очередь, skip, clear"]
   APP2 --> SY["app/synthesis.py<br/>синтез"]
   SY --> ENG["engine / rvc / cosyvoice"]
   classDef deep fill:#064e3b,stroke:#34d399,color:#fff
@@ -127,9 +131,9 @@ graph TD
 <div class="card">
   <pre class="mermaid">
 graph LR
-  M["сообщение Twitch"] --> C["chat_rules.decide"] --> Q["queue"] --> S["synthesis"] --> W["wav в data/cache"] --> E["SSE /events"] --> B["браузер / OBS"]
+  M["сообщение Twitch"] --> C["chat_rules.decide"] --> Q["speak_queue"] --> S["synthesis"] --> W["wav в data/cache"] --> E["SSE /events"] --> B["браузер / OBS"]
   classDef done fill:#064e3b,stroke:#34d399,color:#fff
-  class C,ST done
+  class C,ST,Q done
   </pre>
 </div>
 
@@ -158,8 +162,9 @@ graph LR
 
 <h2>3. Карта модулей сейчас</h2>
   <pre>app/
-  main.py         960  состояние, очередь, синтез, Twitch API, сборка приложения
-  api.py          633  HTTP: страницы, /api/*, SSE /events, отдача /audio      [новый]
+  main.py         930  состояние, синтез, Twitch API, сборка приложения
+  api.py          631  HTTP: страницы, /api/*, SSE /events, отдача /audio      [новый]
+  speak_queue.py 132  очередь озвучки: порядок, пауза, очистка, пропуск       [новый]
   settings.py     120  настройки: defaults, загрузка, нормализация            [новый]
   emote_text.py   190  разбор ремарок и вокализация (текст, без звука)        [новый]
   textkeys.py      8  сравнение имён: norm_key                              [новый]
@@ -179,6 +184,7 @@ graph LR
   emotes    -> emote_text, textkeys
   textproc -> emote_text, langs
   settings  -> -
+  speak_queue -> -
   main     -&gt; все остальные</pre>
   <div class="grid g2">
     <div class="card"><h4>Найдено при аудите</h4>
@@ -208,7 +214,7 @@ graph LR
   api.py            HTTP-слой: build_routes(state)
   chat_rules.py     чистые правила чата: decide()
   settings.py       настройки: defaults, загрузка, нормализация, секреты
-  queue.py          очередь: порядок, skip, clear, состояние
+  speak_queue.py   очередь: порядок, skip, clear, состояние
   synthesis.py      синтез: XTTS / CosyVoice / RVC за единым интерфейсом
   voices.py  engine.py  emotes.py  textproc.py  styles.py  features.py
   langs.py   twitch.py  twitch_api.py  rvc*.py  cosyvoice*.py
@@ -234,7 +240,7 @@ docs/               архитектура, контекст, ADR</pre>
   <h2>6. Потоки данных</h2>
   <h3>Сообщение Twitch</h3>
   <div class="flow">
-    <span>twitch.py</span><i>→</i><span>on_chat</span><i>→</i><span>chat_rules.decide</span><i>→</i><span>Decision</span><i>→</i><span>App: очередь</span><i>→</i><span>worker</span><i>→</i><span>synthesis</span><i>→</i><span>wav</span><i>→</i><span>SSE /events</span><i>→</i><span>браузер</span>
+    <span>twitch.py</span><i>→</i><span>on_chat</span><i>→</i><span>chat_rules.decide</span><i>→</i><span>Decision</span><i>→</i><span>App: очередь</span><i>→</i><span>speak_queue.worker</span><i>→</i><span>synthesis</span><i>→</i><span>wav</span><i>→</i><span>SSE /events</span><i>→</i><span>браузер</span>
   </div>
   <h3>HTTP-запрос</h3>
   <div class="flow">
@@ -292,7 +298,7 @@ docs/               архитектура, контекст, ADR</pre>
     <tr><td>B</td><td>HTTP-слой → <code>app/api.py</code>, <code>app/paths.py</code></td><td><code>build_routes(state)</code></td><td>слепок 37 маршрутов / 25 запросов</td><td><span class="tag t-ok">готово</span></td></tr>
     <tr><td>D</td><td>Настройки → <code>app/settings.py</code></td><td><code>Settings</code>, <code>apply(data)</code></td><td>слепок 26 случаев + юнит-тесты</td><td><span class="tag t-ok">готово</span></td></tr>
     <tr><td>E</td><td>Разрыв цикла <code>textproc ↔ emotes</code></td><td><code>emote_text</code>, <code>textkeys</code></td><td>граф импортов + живой чат</td><td><span class="tag t-ok">готово</span></td></tr>
-    <tr><td>F</td><td>Очередь → <code>app/queue.py</code></td><td><code>enqueue/skip/clear</code></td><td>слепок очереди + живой чат</td><td><span class="tag t-acc">далее</span></td></tr>
+    <tr><td>F</td><td>Очередь → <code>app/speak_queue.py</code></td><td><code>SpeakQueue: synthesize/broadcast/is_ready</code></td><td>слепок очереди + тесты очереди</td><td><span class="tag t-ok">готово</span></td></tr>
     <tr><td>G</td><td>Синтез → <code>app/synthesis.py</code></td><td><code>synthesize(job)</code></td><td>контроль качества A/B</td><td><span class="tag t-acc">далее</span></td></tr>
     <tr><td>H</td><td>Производительность и GPU</td><td>—</td><td>baseline до/после, VRAM, качество</td><td><span class="tag t-acc">отдельный этап</span></td></tr>
   </table>
