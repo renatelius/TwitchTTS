@@ -2,7 +2,6 @@
 """Проверка новых фич: события чата, курс валют, перевод, BRB-экран, плеер для OBS."""
 import os
 import sys
-import threading
 
 os.environ["TTS_MOCK"] = "1"
 APP = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app")
@@ -81,8 +80,6 @@ for key in ("player_only", "highlight_rewards", "event_rules", "brb_seconds", "b
 
 app = appmod.App()
 app.save_settings = lambda: None      # тест не должен трогать настоящие настройки
-app.wake = threading.Event()
-app.skip_event = threading.Event()
 events = []
 app.broadcast = lambda ev: events.append(ev)
 

@@ -12,6 +12,7 @@ import hashlib
 import json
 import os
 import sys
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -109,8 +110,60 @@ def routes_snapshot():
     return rows
 
 
-def http_snapshot(base):
-    """Ответы на типовые запросы: статус, тип, содержимое (нормализованное)."""
+def wait_idle(base, timeout=90.0):
+    """Дожидается пустой очереди.
+
+    Слепок описывает состояние системы, когда ничего не звучит: если рядом
+    осталась реплика, счётчик и поле now меняются и сверка врёт.
+    """
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            st = json.load(urllib.request.urlopen(base.rstrip("/") + "/api/state", timeout=30))["status"]
+        except Exception:
+            time.sleep(0.3)
+            continue
+        if not st.get("queue"):
+            return True
+        req = urllib.request.Request(base.rstrip("/") + "/api/control/clear", data=b"{}",
+                                     headers={"Content-Type": "application/json"}, method="POST")
+        try:
+            urllib.request.urlopen(req, timeout=30).read()
+        except Exception:
+            pass
+        time.sleep(0.3)
+    return False
+
+
+def current_settings(base):
+    """Настройки сервера - чтобы вернуть их после проверок."""
+    try:
+        req = urllib.request.Request(base.rstrip("/") + "/api/state", method="GET")
+        with urllib.request.urlopen(req, timeout=30) as r:
+            return json.loads(r.read().decode("utf-8")).get("settings") or {}
+    except Exception:
+        return {}
+
+
+def restore_settings(base, settings):
+    """Возвращает настройки как были.
+
+    Проверка меняет громкость и скорость - без возврата слепок затирал бы
+    пользовательские настройки.
+    """
+    if not settings:
+        return
+    try:
+        req = urllib.request.Request(base.rstrip("/") + "/api/settings",
+                                     data=json.dumps(settings).encode("utf-8"),
+                                     headers={"Content-Type": "application/json"}, method="POST")
+        urllib.request.urlopen(req, timeout=30).read()
+    except Exception:
+        pass
+
+
+def _http_rows(base):
+    """Сырые ответы на типовые запросы: статус, тип, содержимое (нормализованное)."""
     rows = []
     for method, path, payload in CHECKS:
         url = base.rstrip("/") + path
@@ -134,6 +187,20 @@ def http_snapshot(base):
             row["body_len"] = len(raw)
         rows.append(row)
     return rows
+
+
+def http_snapshot(base):
+    """Ответы на типовые запросы.
+
+    Настройки, которые меняет проверка, возвращаются как были: иначе слепок
+    затирал бы пользовательские настройки (громкость, скорость).
+    """
+    wait_idle(base)
+    original = current_settings(base)
+    try:
+        return _http_rows(base)
+    finally:
+        restore_settings(base, original)
 
 
 def build(base):

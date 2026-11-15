@@ -12,7 +12,6 @@ import json
 import os
 import sys
 import time
-from collections import deque
 from pathlib import Path
 
 os.environ["TTS_MOCK"] = "1"
@@ -126,9 +125,6 @@ def build_app(base_settings):
     app.voices = FakeVoices()
     app.user_voices = {}
     app.last_spoke = {}
-    app.pending = deque()
-    app.wake = __import__("threading").Event()
-    app.skip_event = __import__("threading").Event()
     app.save_settings = lambda: None          # настройки не трогаем
     appmod.save_json = lambda path, data: None  # user_voices.json не трогаем
     app.settings = dict(base_settings)

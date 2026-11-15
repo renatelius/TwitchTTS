@@ -2,7 +2,6 @@
 """Проверка Twitch API: награды, подписчики, таймауты."""
 import os
 import sys
-import threading
 
 os.environ["TTS_MOCK"] = "1"
 APP = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app")
@@ -60,8 +59,6 @@ check("API: таймаут - тело", calls[-1][3]["data"]["duration"], 300)
 # --- приложение ---
 app = appmod.App()
 app.save_settings = lambda: None
-app.wake = threading.Event()
-app.skip_event = threading.Event()
 events = []
 app.broadcast = lambda ev: events.append(ev)
 
