@@ -1,0 +1,866 @@
+[
+  {
+    "case": "обычное сообщение",
+    "result": {
+      "events": [
+        {
+          "text": "привет чат",
+          "tts": true,
+          "type": "chat",
+          "user": "zviewer",
+          "voice": "Дудя"
+        }
+      ],
+      "queued": [
+        {
+          "style": "",
+          "text": "привет чат",
+          "user": "zviewer",
+          "voice": "Дудя"
+        }
+      ],
+      "user_voices": {}
+    }
+  },
+  {
+    "case": "пустое сообщение",
+    "result": {
+      "events": [
+        {
+          "note": "нечего читать",
+          "type": "chat",
+          "user": "zviewer"
+        }
+      ],
+      "queued": [],
+      "user_voices": {}
+    }
+  },
+  {
+    "case": "только эмоция",
+    "result": {
+      "events": [
+        {
+          "text": "(смех)",
+          "tts": true,
+          "type": "chat",
+          "user": "zviewer",
+          "voice": "Дудя"
+        }
+      ],
+      "queued": [
+        {
+          "style": "",
+          "text": "{laugh}",
+          "user": "zviewer",
+          "voice": "Дудя"
+        }
+      ],
+      "user_voices": {}
+    }
+  },
+  {
+    "case": "префикс без настройки",
+    "result": {
+      "events": [
+        {
+          "text": "привет",
+          "tts": true,
+          "type": "chat",
+          "user": "zviewer",
+          "voice": "Дудя"
+        }
+      ],
+      "queued": [
+        {
+          "style": "",
+          "text": "привет",
+          "user": "zviewer",
+          "voice": "Дудя"
+        }
+      ],
+      "user_voices": {}
+    }
+  },
+  {
+    "case": "стиль в ремарке",
+    "result": {
+      "events": [
+        {
+          "text": "(радостно) привет",
+          "tts": true,
+          "type": "chat",
+          "user": "zviewer",
+          "voice": "Дудя"
+        }
+      ],
+      "queued": [
+        {
+          "style": "happy",
+          "text": "привет",
+          "user": "zviewer",
+          "voice": "Дудя"
+        }
+      ],
+      "user_voices": {}
+    }
+  },
+  {
+    "case": "стиль шёпотом",
+    "result": {
+      "events": [
+        {
+          "text": "(шёпотом) тише",
+          "tts": true,
+          "type": "chat",
+          "user": "zviewer",
+          "voice": "Дудя"
+        }
+      ],
+      "queued": [
+        {
+          "style": "whisper",
+          "text": "тише",
+          "user": "zviewer",
+          "voice": "Дудя"
+        }
+      ],
+      "user_voices": {}
+    }
+  },
+  {
+    "case": "голос на сообщение",
+    "result": {
+      "events": [
+        {
+          "text": "привет",
+          "tts": true,
+          "type": "chat",
+          "user": "zviewer",
+          "voice": "Дудя"
+        }
+      ],
+      "queued": [
+        {
+          "style": "",
+          "text": "привет",
+          "user": "zviewer",
+          "voice": "Дудя"
+        }
+      ],
+      "user_voices": {}
+    }
+  },
+  {
+    "case": "случайный голос",
+    "result": {
+      "events": [
+        {
+          "text": "привет",
+          "tts": true,
+          "type": "chat",
+          "user": "zviewer",
+          "voice": "<random>"
+        }
+      ],
+      "queued": [
+        {
+          "style": "",
+          "text": "привет",
+          "user": "zviewer",
+          "voice": "<random>"
+        }
+      ],
+      "user_voices": {}
+    }
+  },
+  {
+    "case": "действие /me",
+    "result": {
+      "events": [
+        {
+          "text": "машет рукой",
+          "tts": true,
+          "type": "chat",
+          "user": "zviewer",
+          "voice": "Дудя"
+        }
+      ],
+      "queued": [
+        {
+          "style": "",
+          "text": "машет рукой",
+          "user": "zviewer",
+          "voice": "Дудя"
+        }
+      ],
+      "user_voices": {}
+    }
+  },
+  {
+    "case": "раскладка",
+    "result": {
+      "events": [
+        {
+          "text": "Привет мир",
+          "tts": true,
+          "type": "chat",
+          "user": "zviewer",
+          "voice": "Дудя"
+        }
+      ],
+      "queued": [
+        {
+          "style": "",
+          "text": "Привет мир",
+          "user": "zviewer",
+          "voice": "Дудя"
+        }
+      ],
+      "user_voices": {}
+    }
+  },
+  {
+    "case": "ударение",
+    "result": {
+      "events": [
+        {
+          "text": "торты",
+          "tts": true,
+          "type": "chat",
+          "user": "zviewer",
+          "voice": "Дудя"
+        }
+      ],
+      "queued": [
+        {
+          "style": "",
+          "text": "торты",
+          "user": "zviewer",
+          "voice": "Дудя"
+        }
+      ],
+      "user_voices": {}
+    }
+  },
+  {
+    "case": "префикс без сообщения",
+    "result": {
+      "events": [
+        {
+          "note": "без префикса",
+          "text": "привет",
+          "type": "chat",
+          "user": "zviewer"
+        }
+      ],
+      "queued": [],
+      "user_voices": {}
+    }
+  },
+  {
+    "case": "префикс с сообщением",
+    "result": {
+      "events": [
+        {
+          "text": "привет",
+          "tts": true,
+          "type": "chat",
+          "user": "zviewer",
+          "voice": "Дудя"
+        }
+      ],
+      "queued": [
+        {
+          "style": "",
+          "text": "привет",
+          "user": "zviewer",
+          "voice": "Дудя"
+        }
+      ],
+      "user_voices": {}
+    }
+  },
+  {
+    "case": "голос командой",
+    "result": {
+      "events": [
+        {
+          "text": "!г дудя",
+          "type": "chat",
+          "user": "zviewer"
+        },
+        {
+          "text": "zviewer теперь говорит голосом «Дудя»",
+          "type": "note"
+        }
+      ],
+      "queued": [],
+      "user_voices": {
+        "zviewer": "v1"
+      }
+    }
+  },
+  {
+    "case": "голос сбросом",
+    "result": {
+      "events": [
+        {
+          "text": "!г default",
+          "type": "chat",
+          "user": "zviewer"
+        },
+        {
+          "text": "zviewer снова говорит голосом канала",
+          "type": "note"
+        }
+      ],
+      "queued": [],
+      "user_voices": {}
+    }
+  },
+  {
+    "case": "голос не найден",
+    "result": {
+      "events": [
+        {
+          "text": "!г кривой",
+          "type": "chat",
+          "user": "zviewer"
+        },
+        {
+          "text": "zviewer: голос «кривой» не найден",
+          "type": "note"
+        }
+      ],
+      "queued": [],
+      "user_voices": {}
+    }
+  },
+  {
+    "case": "голос запрещён",
+    "result": {
+      "events": [
+        {
+          "text": "!г дудя",
+          "type": "chat",
+          "user": "zviewer"
+        },
+        {
+          "text": "zviewer: голос «Дудя» запрещён",
+          "type": "note"
+        }
+      ],
+      "queued": [],
+      "user_voices": {}
+    }
+  },
+  {
+    "case": "пропуск модератором",
+    "result": {
+      "events": [
+        {
+          "text": "!скип",
+          "type": "chat",
+          "user": "mod"
+        }
+      ],
+      "queued": [],
+      "user_voices": {}
+    }
+  },
+  {
+    "case": "пропуск не модератором",
+    "result": {
+      "events": [
+        {
+          "note": "команда",
+          "text": "!скип",
+          "type": "chat",
+          "user": "zviewer"
+        }
+      ],
+      "queued": [],
+      "user_voices": {}
+    }
+  },
+  {
+    "case": "курс валют",
+    "result": {
+      "events": [
+        {
+          "text": "!курс 100 usd",
+          "type": "chat",
+          "user": "zviewer"
+        }
+      ],
+      "queued": [],
+      "user_voices": {}
+    }
+  },
+  {
+    "case": "перевод",
+    "result": {
+      "events": [
+        {
+          "text": "!перевод hello world",
+          "type": "chat",
+          "user": "zviewer"
+        }
+      ],
+      "queued": [],
+      "user_voices": {}
+    }
+  },
+  {
+    "case": "выделить модератором",
+    "result": {
+      "events": [
+        {
+          "text": "!выделить важно",
+          "type": "chat",
+          "user": "mod"
+        },
+        {
+          "highlight": true,
+          "text": "важно",
+          "type": "chat",
+          "user": "mod"
+        }
+      ],
+      "queued": [],
+      "user_voices": {}
+    }
+  },
+  {
+    "case": "выделить не модератором",
+    "result": {
+      "events": [
+        {
+          "note": "команда",
+          "text": "!выделить важно",
+          "type": "chat",
+          "user": "zviewer"
+        }
+      ],
+      "queued": [],
+      "user_voices": {}
+    }
+  },
+  {
+    "case": "закрепить модератором",
+    "result": {
+      "events": [
+        {
+          "text": "!закрепить наверх",
+          "type": "chat",
+          "user": "mod"
+        },
+        {
+          "text": "наверх",
+          "type": "pin",
+          "user": "mod"
+        }
+      ],
+      "queued": [],
+      "user_voices": {}
+    }
+  },
+  {
+    "case": "закрепить не модератором",
+    "result": {
+      "events": [
+        {
+          "note": "команда",
+          "text": "!закрепить наверх",
+          "type": "chat",
+          "user": "zviewer"
+        }
+      ],
+      "queued": [],
+      "user_voices": {}
+    }
+  },
+  {
+    "case": "BRB модератором",
+    "result": {
+      "events": [
+        {
+          "text": "!брб 5",
+          "type": "chat",
+          "user": "mod"
+        },
+        {
+          "message": "Скоро вернусь",
+          "type": "brb"
+        }
+      ],
+      "queued": [],
+      "user_voices": {}
+    }
+  },
+  {
+    "case": "BRB не модератором",
+    "result": {
+      "events": [
+        {
+          "note": "команда",
+          "text": "!брб 5",
+          "type": "chat",
+          "user": "zviewer"
+        }
+      ],
+      "queued": [],
+      "user_voices": {}
+    }
+  },
+  {
+    "case": "таймаут модератором",
+    "result": {
+      "events": [
+        {
+          "text": "!таймаут vasya 300",
+          "type": "chat",
+          "user": "mod"
+        }
+      ],
+      "queued": [],
+      "user_voices": {}
+    }
+  },
+  {
+    "case": "таймаут не модератором",
+    "result": {
+      "events": [
+        {
+          "note": "команда",
+          "text": "!таймаут vasya 300",
+          "type": "chat",
+          "user": "zviewer"
+        }
+      ],
+      "queued": [],
+      "user_voices": {}
+    }
+  },
+  {
+    "case": "бот в стоп-листе",
+    "result": {
+      "events": [
+        {
+          "note": "бот",
+          "text": "привет",
+          "type": "chat",
+          "user": "Nightbot"
+        }
+      ],
+      "queued": [],
+      "user_voices": {}
+    }
+  },
+  {
+    "case": "зритель в запрет-списке",
+    "result": {
+      "events": [
+        {
+          "note": "не озвучивать этого зрителя",
+          "text": "привет",
+          "type": "chat",
+          "user": "zviewer"
+        }
+      ],
+      "queued": [],
+      "user_voices": {}
+    }
+  },
+  {
+    "case": "только для своих",
+    "result": {
+      "events": [
+        {
+          "note": "не озвучивать этого зрителя",
+          "text": "привет",
+          "type": "chat",
+          "user": "zviewer"
+        }
+      ],
+      "queued": [],
+      "user_voices": {}
+    }
+  },
+  {
+    "case": "цифра",
+    "result": {
+      "events": [
+        {
+          "note": "цифра",
+          "text": "123",
+          "type": "chat",
+          "user": "zviewer"
+        }
+      ],
+      "queued": [],
+      "user_voices": {}
+    }
+  },
+  {
+    "case": "запрещённое слово",
+    "result": {
+      "events": [
+        {
+          "note": "запрещённое слово",
+          "text": "это плохое слово",
+          "type": "chat",
+          "user": "zviewer"
+        }
+      ],
+      "queued": [],
+      "user_voices": {}
+    }
+  },
+  {
+    "case": "только подписчикам",
+    "result": {
+      "events": [
+        {
+          "note": "только для подписчиков",
+          "text": "привет",
+          "type": "chat",
+          "user": "zviewer"
+        }
+      ],
+      "queued": [],
+      "user_voices": {}
+    }
+  },
+  {
+    "case": "подписчику можно",
+    "result": {
+      "events": [
+        {
+          "text": "привет",
+          "tts": true,
+          "type": "chat",
+          "user": "sub",
+          "voice": "Дудя"
+        }
+      ],
+      "queued": [
+        {
+          "style": "",
+          "text": "привет",
+          "user": "sub",
+          "voice": "Дудя"
+        }
+      ],
+      "user_voices": {}
+    }
+  },
+  {
+    "case": "многие раз подряд",
+    "result": {
+      "events": [
+        {
+          "note": "слишком часто",
+          "text": "привет",
+          "type": "chat",
+          "user": "zviewer"
+        }
+      ],
+      "queued": [],
+      "user_voices": {}
+    }
+  },
+  {
+    "case": "очередь полна",
+    "result": {
+      "events": [
+        {
+          "text": "привет",
+          "tts": true,
+          "type": "chat",
+          "user": "zviewer",
+          "voice": "Дудя"
+        }
+      ],
+      "queued": [
+        {
+          "style": "",
+          "text": "привет",
+          "user": "zviewer",
+          "voice": "Дудя"
+        }
+      ],
+      "user_voices": {}
+    }
+  },
+  {
+    "case": "озвучка выключена",
+    "result": {
+      "events": [
+        {
+          "note": "озвучка выключена",
+          "text": "привет",
+          "type": "chat",
+          "user": "zviewer"
+        }
+      ],
+      "queued": [],
+      "user_voices": {}
+    }
+  },
+  {
+    "case": "награда при выключенном пропуске",
+    "result": {
+      "events": [
+        {
+          "text": "сообщение с наградой",
+          "tts": true,
+          "type": "chat",
+          "user": "zviewer",
+          "voice": "Дудя"
+        }
+      ],
+      "queued": [
+        {
+          "style": "",
+          "text": "сообщение с наградой",
+          "user": "zviewer",
+          "voice": "Дудя"
+        }
+      ],
+      "user_voices": {}
+    }
+  },
+  {
+    "case": "награда при пропуске",
+    "result": {
+      "events": [
+        {
+          "note": "награда за баллы",
+          "text": "сообщение с наградой",
+          "type": "chat",
+          "user": "zviewer"
+        }
+      ],
+      "queued": [],
+      "user_voices": {}
+    }
+  },
+  {
+    "case": "награда выделяется",
+    "result": {
+      "events": [
+        {
+          "highlight": true,
+          "note": "награда за баллы",
+          "text": "сообщение с наградой",
+          "type": "chat",
+          "user": "zviewer"
+        }
+      ],
+      "queued": [],
+      "user_voices": {}
+    }
+  },
+  {
+    "case": "рейд по тегу",
+    "result": {
+      "events": [
+        {
+          "text": "Bob is now raiding the channel.",
+          "type": "chat",
+          "user": "zviewer"
+        },
+        {
+          "event": "raid",
+          "highlight": true,
+          "text": "Рейд от zviewer",
+          "type": "chat",
+          "user": "zviewer"
+        }
+      ],
+      "queued": [],
+      "user_voices": {}
+    }
+  },
+  {
+    "case": "рейд по тексту",
+    "result": {
+      "events": [
+        {
+          "text": "что-то",
+          "type": "chat",
+          "user": "zviewer"
+        },
+        {
+          "event": "raid",
+          "highlight": true,
+          "text": "Bob is now raiding the channel.",
+          "type": "chat",
+          "user": "zviewer"
+        }
+      ],
+      "queued": [],
+      "user_voices": {}
+    }
+  },
+  {
+    "case": "подписка по тегу",
+    "result": {
+      "events": [
+        {
+          "text": "Bob just subscribed!",
+          "type": "chat",
+          "user": "zviewer"
+        },
+        {
+          "event": "sub",
+          "highlight": true,
+          "text": "Подписка: zviewer",
+          "type": "chat",
+          "user": "zviewer"
+        }
+      ],
+      "queued": [],
+      "user_voices": {}
+    }
+  },
+  {
+    "case": "битсы по тегу",
+    "result": {
+      "events": [
+        {
+          "text": "Bob cheered 100 bits",
+          "type": "chat",
+          "user": "zviewer"
+        }
+      ],
+      "queued": [],
+      "user_voices": {}
+    }
+  },
+  {
+    "case": "обычный текст без события",
+    "result": {
+      "events": [
+        {
+          "text": "просто текст",
+          "tts": true,
+          "type": "chat",
+          "user": "zviewer",
+          "voice": "Дудя"
+        }
+      ],
+      "queued": [
+        {
+          "style": "",
+          "text": "просто текст",
+          "user": "zviewer",
+          "voice": "Дудя"
+        }
+      ],
+      "user_voices": {}
+    }
+  }
+]

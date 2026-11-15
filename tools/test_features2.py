@@ -8,8 +8,9 @@ os.environ["TTS_MOCK"] = "1"
 APP = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app")
 sys.path.insert(0, APP)
 
-import features as featlib   # noqa: E402
-import main as appmod       # noqa: E402
+import features as featlib     # noqa: E402
+import chat_rules as chatrules  # noqa: E402
+import main as appmod           # noqa: E402
 
 FAILED = []
 
@@ -84,34 +85,47 @@ app.skip_event = threading.Event()
 events = []
 app.broadcast = lambda ev: events.append(ev)
 
+def decide(message, settings=None):
+    """Решение правил чата для сообщения."""
+    ctx = chatrules.Context(settings=app.settings if settings is None else settings)
+    return chatrules.decide(message, ctx)
+
+
 app.settings["event_rules"] = {"raid": "announce"}
 msg = {"id": "1", "name": "Bob", "msg_id": "raid", "system_msg": "Bob is now raiding the channel."}
-app.handle_event("raid", msg)
+d = decide(msg)
+check("событие: решено объявить", d.kind, chatrules.EVENT)
+check("событие: правило announce", d.rule, "announce")
+app.run_event(d, msg)
 check("событие: рейд попал в чат", events[-1].get("event"), "raid")
 check("событие: текст рейда", events[-1].get("text"), "Bob is now raiding the channel.")
 
 events.clear()
 app.settings["event_rules"] = {"raid": "ignore"}
-app.handle_event("raid", msg)
+d = decide(msg)
+check("событие: правило ignore", d.rule, "ignore")
+app.run_event(d, msg)
 check("событие: правило ignore молчит", len(events), 0)
 
 events.clear()
 mod = {"id": "2", "name": "Mod", "color": "#fff", "is_mod": True, "is_broadcaster": False,
        "is_reward": False, "is_sub": False, "is_vip": False, "login": "mod",
        "text": "!выделить привет", "emotes": [], "msg_id": "", "system_msg": ""}
-handled = app.handle_command(mod, "!выделить", "привет", {"type": "chat"})
-check("команда: !выделить обработана", handled, True)
+d = decide(mod)
+check("команда: !выделить распознана", (d.kind, d.command), (chatrules.COMMAND, "highlight"))
+app.run_command(d, mod)
 check("команда: !выделить помечает сообщение", events[-1].get("highlight"), True)
 
 events.clear()
 plain = dict(mod, is_mod=False)
-handled = app.handle_command(plain, "!выделить", "привет", {"type": "chat"})
-check("команда: !выделить не для простого зрителя", handled, False)
+d = decide(plain)
+check("команда: !выделить не для простого зрителя", d.kind == chatrules.COMMAND, False)
 
 events.clear()
-handled = app.handle_command(mod, "!курс", "100 usd", {"type": "chat"})
-check("команда: !курс разобран", handled, True)
-check("команда: !курс без сети не падает", len(events) >= 1, True)
+d = decide(dict(mod, text="!курс 100 usd"))
+check("команда: !курс распознана", (d.kind, d.command), (chatrules.COMMAND, "rate"))
+app.run_command(d, mod)
+check("команда: !курс без сети не падает", len(events), 0)
 
 state = app.set_brb(60, "Пока")
 check("BRB: таймер включён", state["active"], True)

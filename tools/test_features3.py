@@ -9,6 +9,7 @@ APP = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 
 sys.path.insert(0, APP)
 
 import twitch_api as tapilib   # noqa: E402
+import chat_rules as chatrules  # noqa: E402
 import main as appmod          # noqa: E402
 
 FAILED = []
@@ -100,12 +101,21 @@ events.clear()
 mod = {"id": "2", "login": "mod", "name": "Mod", "color": "#fff", "text": "!таймаут vasya 300",
        "emotes": [], "is_mod": True, "is_broadcaster": False, "is_reward": False,
        "is_sub": False, "is_vip": False, "msg_id": "", "system_msg": ""}
-handled = app.handle_command(mod, "!таймаут", "vasya 300", {"type": "chat"})
-check("команда: !таймаут обработана", handled, True)
+
+
+def decide(message):
+    ctx = chatrules.Context(settings=app.settings)
+    return chatrules.decide(message, ctx)
+
+
+d = decide(mod)
+check("команда: !таймаут распознана", (d.kind, d.command), (chatrules.COMMAND, "timeout"))
+check("команда: аргументы таймаута", d.args, "vasya 300")
+app.run_command(d, mod)          # ответ уходит в Twitch API - падать не должно
 
 plain = dict(mod, is_mod=False)
-check("команда: !таймаут не для простого зрителя",
-      app.handle_command(plain, "!таймаут", "vasya 300", {"type": "chat"}), False)
+d = decide(plain)
+check("команда: !таймаут не для простого зрителя", d.kind == chatrules.COMMAND, False)
 
 print("")
 print("Провалено: %d" % len(FAILED))

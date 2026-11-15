@@ -35,9 +35,11 @@ from starlette.staticfiles import StaticFiles  # noqa: E402
 from engine import OUT_SR, REF_SR, MockEngine, XttsEngine, write_wav  # noqa: E402
 import rvc as rvclib  # noqa: E402
 import cosyvoice as cvlib  # noqa: E402
-from textproc import clean_text, fix_layout, segments, strip_stress  # noqa: E402
+from textproc import clean_text, segments  # noqa: E402
 import styles as stylelib  # noqa: E402
 import features as featlib  # noqa: E402
+import chat_rules as chatrules  # noqa: E402
+from chat_rules import login_allowed, split_prefix, split_voice_prefix, voice_blocked  # noqa: E402
 import emotes as emotelib  # noqa: E402
 import langs  # noqa: E402
 from twitch import TwitchChat, normalize_channel  # noqa: E402
@@ -122,58 +124,6 @@ DEFAULTS = {
     "speak_reward": "",         # название награды, сообщения из которой озвучиваются
     "follow_rule": "ignore",    # реакция на нового подписчика: ignore|announce|speak
 }
-
-def voice_blocked(settings, voice):
-    """Голос запрещён для зрителей (список «Запрещённые голоса»)."""
-    names = {str(x).strip().lower() for x in (settings.get("blocked_voices") or []) if str(x).strip()}
-    if not names or not voice:
-        return False
-    return (str(voice.get("name", "")).strip().lower() in names
-            or str(voice.get("id", "")) in names)
-
-
-def login_allowed(settings, login):
-    """Кого озвучивать: список «только своих» и список «не озвучивать»."""
-    lg = str(login or "").strip().lower()
-    deny = {str(x).strip().lower() for x in (settings.get("tts_deny") or []) if str(x).strip()}
-    allow = {str(x).strip().lower() for x in (settings.get("tts_allow") or []) if str(x).strip()}
-    if lg and lg in deny:
-        return False
-    if allow and lg not in allow:
-        return False
-    return True
-
-
-def split_prefix(text, prefix):
-    """Отделить префикс озвучки от текста: ("привет", "!!!") или ("привет", "").
-
-    Префикс задаёт стример (например "!!!"): такие сообщения озвучиваются
-    голосом зрителя, а сам префикс не читается.
-    """
-    if not prefix:
-        return text, ""
-    p = prefix.strip()
-    if text.lower().startswith(p.lower()):
-        return text[len(p):].strip(), p
-    return text, ""
-
-
-def split_voice_prefix(text):
-    """«!!!#дудя привет» -> («дудя», «привет»). Голос только для этого сообщения."""
-    if not text.startswith("!!!#"):
-        return "", text
-    head, _, tail = text[4:].partition(" ")
-    return head.strip(), tail.strip()
-
-
-for d in (DATA, CACHE, TMP):
-    d.mkdir(parents=True, exist_ok=True)
-
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-    handlers=[logging.StreamHandler(), logging.FileHandler(DATA / "log.txt", encoding="utf-8")])
-log = logging.getLogger("app")
-
 
 def load_json(path, default):
     try:
@@ -378,128 +328,51 @@ class App:
 
     # ---------- чат ----------
     def on_chat(self, m):
-        s = self.settings
-        text = m["text"].strip()
-        # действие /me - отдельный голос, префикс не читается
-        is_me = text.lower().startswith("/me ")
-        if is_me:
-            text = text[4:].strip()
-        # голос только для этого сообщения: !!!#дудя привет
-        one_voice, rest_text = split_voice_prefix(text)
-        # префикс озвучки (например "!!!"): без него сообщение не читается
-        prefix = str(s.get("tts_prefix") or "").strip()
-        text, used_prefix = split_prefix(text, prefix)
-        no_prefix = bool(prefix) and not used_prefix
-        if one_voice:
-            text = rest_text
-        if s.get("fix_layout"):
-            text = fix_layout(text)
-        text = strip_stress(text)
-        # стиль речи: (радостно) привет - читаем радостно
-        style_key, speak_text = stylelib.match_style(text)
-        event = {"type": "chat", "id": m["id"] or uuid.uuid4().hex, "user": m["name"],
-                 "color": m["color"], "text": text, "tts": False, "note": ""}
-        low = text.lower()
-        first, _, rest = low.partition(" ")
-        first_raw, _, rest_raw = text.partition(" ")
+        """Сообщение из чата.
 
-        if first in ("!г", "!голос", "!voice", "!tts", "!ттс"):
-            self.broadcast(event)
-            if not rest.strip() or rest.strip().lower() in ("default", "сброс", "по умолчанию"):
-                self.user_voices.pop(m["login"], None)
-                save_json(DATA / "user_voices.json", self.user_voices)
-                self.broadcast({"type": "note", "text": "%s снова говорит голосом канала" % m["name"]})
-                return
-            voice = self.voices.resolve(rest)
-            if voice and voice_blocked(s, voice):
-                self.broadcast({"type": "note", "text": "%s: голос «%s» запрещён" % (m["name"], voice["name"])})
-                return
-            if voice:
-                self.user_voices[m["login"]] = voice["id"]
-                save_json(DATA / "user_voices.json", self.user_voices)
-                self.broadcast({"type": "note", "text": "%s теперь говорит голосом «%s»" % (m["name"], voice["name"])})
-            else:
-                self.broadcast({"type": "note", "text": "%s: голос «%s» не найден" % (m["name"], rest.strip())})
-            return
-        if first in ("!скип", "!skip") and (m["is_mod"] or m["is_broadcaster"]):
-            self.broadcast(event)
-            self.skip()
-            return
-
-        # события Twitch: рейд, подписка, битсы - по системным тегам IRC
-        kind = featlib.detect_event(m.get("msg_id", ""), m.get("system_msg", ""))
-        if kind:
-            self.broadcast(event)
-            self.handle_event(kind, m)
-            return
-
-        # команды: курс валют, перевод, выделение, закрепление, BRB
-        if self.handle_command(m, first_raw.lower(), rest_raw, event):
-            return
-
-        # сообщение, отправленное за награду: выделяем и/или озвучиваем по названию
-        reward_speak = False
+        Правила решают (app/chat_rules.py), App исполняет: озвучивает,
+        пишет в чат, меняет настройки.
+        """
+        reward_title = ""
         if m.get("is_reward"):
             self.api_sync()
-            title = self.reward_title(m.get("reward_id", ""))
-            if title:
-                event["reward"] = title
-            low_title = title.lower()
-            if low_title and low_title == str(s.get("highlight_reward") or "").strip().lower():
-                event["highlight"] = True
-            if low_title and low_title == str(s.get("speak_reward") or "").strip().lower():
-                reward_speak = True
-            elif s.get("highlight_rewards"):
-                event["highlight"] = True
-
-        note = ""
-        if s.get("muted"):
-            note = "озвучка выключена"
-        elif no_prefix:
-            note = "без префикса"
-        elif m["login"] in [u.lower() for u in s["ignore_users"]]:
-            note = "бот"
-        elif not login_allowed(s, m["login"]):
-            note = "не озвучивать этого зрителя"
-        elif text.startswith("!") and s["skip_commands"]:
-            note = "команда"
-        elif s["skip_digits"] and text.strip().isdigit():
-            # голоса в опросах: зритель пишет "1", "2" или "3" - вслух это не читаем
-            note = "цифра"
-        elif m.get("is_reward") and s["skip_rewards"] and not reward_speak:
-            note = "награда за баллы"
-        elif s["audience"] == "subs" and not (m["is_sub"] or m["is_vip"] or m["is_mod"] or m["is_broadcaster"]):
-            note = "только для подписчиков"
-        elif any(w and w.lower() in low for w in s["blocked_words"]):
-            note = "запрещённое слово"
-        elif s["cooldown"] and time.time() - self.last_spoke.get(m["login"], 0) < s["cooldown"]:
-            note = "слишком часто"
-        if note:
-            event["note"] = note
+            reward_title = self.reward_title(m.get("reward_id", ""))
+        ctx = chatrules.Context(settings=self.settings,
+                                last_spoke=self.last_spoke.get(m["login"], 0),
+                                queue_len=len(self.pending),
+                                now=time.time(),
+                                reward_title=reward_title)
+        d = chatrules.decide(m, ctx)
+        event = {"type": "chat", "id": m["id"] or uuid.uuid4().hex, "user": m["name"],
+                 "color": m["color"], "text": d.text, "tts": False, "note": ""}
+        if d.reward:
+            event["reward"] = d.reward
+        if d.highlight:
+            event["highlight"] = True
+        if d.kind == chatrules.COMMAND:
             self.broadcast(event)
+            self.run_command(d, m)
             return
-
-        cleaned = self.clean(speak_text or text, m["emotes"])
-        if not cleaned:
-            event["note"] = "нечего читать"
+        if d.kind == chatrules.EVENT:
             self.broadcast(event)
+            self.run_event(d, m)
             return
-        if len(self.pending) >= int(s["max_queue"]):
-            event["note"] = "очередь заполнена"
+        if d.kind == chatrules.SKIP:
+            event["note"] = d.note
             self.broadcast(event)
             return
         voice = self.voice_for(m["login"])
-        if is_me and s.get("me_voice"):
-            mv = self.voices.get(s["me_voice"])
+        if d.is_me and self.settings.get("me_voice"):
+            mv = self.voices.get(self.settings["me_voice"])
             if mv and mv.get("enabled"):
                 voice = mv
-        if one_voice:
-            if one_voice.lower() in ("random", "случайный", "рандом"):
+        if d.voice_hint:
+            if d.voice_hint.lower() in ("random", "случайный", "рандом"):
                 pool = self.voices.enabled()
                 if pool:
                     voice = pool[int(time.time() * 1000) % len(pool)]
             else:
-                picked = self.voices.resolve(one_voice)
+                picked = self.voices.resolve(d.voice_hint)
                 if picked:
                     voice = picked
         if not voice:
@@ -510,8 +383,9 @@ class App:
         event["tts"] = True
         event["voice"] = voice["name"]
         self.broadcast(event)
-        speak = ("%s говорит: %s" % (m["name"].replace("_", " "), cleaned)) if s["read_names"] else cleaned
-        self.enqueue(event["id"], m["name"], speak, voice, style_key)
+        speak = ("%s говорит: %s" % (m["name"].replace("_", " "), d.speak_text)
+                 if self.settings["read_names"] else d.speak_text)
+        self.enqueue(event["id"], m["name"], speak, voice, d.style_key)
 
     def clean(self, text, emote_ranges=None, max_len=None):
         """Чистка текста с учётом настройки «эмоции»."""
@@ -867,72 +741,80 @@ class App:
             coro.close()
             return None
 
-    def handle_event(self, kind, m):
-        """Правило на событие Twitch: рейд, подписка, битсы."""
-        rules = self.settings.get("event_rules") or {}
-        action = str(rules.get(kind, featlib.DEFAULT_RULES.get(kind, "ignore"))).lower()
-        if action == "ignore":
-            return
-        text = featlib.event_text(kind, m.get("name", ""), m.get("system_msg", ""))
-        if not text:
+    def run_event(self, d, m):
+        """Событие Twitch: объявить в чате и (по правилу) озвучить."""
+        if d.rule == "ignore" or not d.event_text:
             return
         ev = {"type": "chat", "id": m.get("id") or uuid.uuid4().hex,
-              "user": m.get("name") or "", "color": "#f59e0b", "text": text,
-              "tts": False, "event": kind, "highlight": True}
+              "user": m.get("name") or "", "color": "#f59e0b", "text": d.event_text,
+              "tts": False, "event": d.event, "highlight": True}
         self.broadcast(ev)
-        if action == "speak":
+        if d.rule == "speak":
             voice = self.default_voice()
             if voice:
-                self.enqueue(ev["id"], ev["user"], text, voice)
+                self.enqueue(ev["id"], ev["user"], d.event_text, voice)
 
-    def handle_command(self, m, cmd, rest, event):
-        """Команды чата. True - сообщение обработано, озвучивать его не нужно."""
-        mod = bool(m["is_mod"] or m["is_broadcaster"])
-        rest = (rest or "").strip()
-        if cmd in ("!курс", "!курсы", "!rate", "!fx", "!валюта"):
-            self.broadcast(event)
+    def run_command(self, d, m):
+        """Исполняет команду чата: решение принято в chat_rules, действие здесь."""
+        cmd = d.command
+        rest = (d.args or "").strip()
+        if cmd == "voice":
+            if not rest or rest.lower() in ("default", "сброс", "по умолчанию"):
+                self.user_voices.pop(m["login"], None)
+                save_json(DATA / "user_voices.json", self.user_voices)
+                self.broadcast({"type": "note", "text": "%s снова говорит голосом канала" % m["name"]})
+                return
+            voice = self.voices.resolve(rest)
+            if voice and voice_blocked(self.settings, voice):
+                self.broadcast({"type": "note", "text": "%s: голос «%s» запрещён" % (m["name"], voice["name"])})
+                return
+            if voice:
+                self.user_voices[m["login"]] = voice["id"]
+                save_json(DATA / "user_voices.json", self.user_voices)
+                self.broadcast({"type": "note", "text": "%s теперь говорит голосом «%s»" % (m["name"], voice["name"])})
+            else:
+                self.broadcast({"type": "note", "text": "%s: голос «%s» не найден" % (m["name"], rest)})
+            return
+        if cmd == "skip":
+            self.skip()
+            return
+        if cmd == "rate":
             amount, src, dst = featlib.parse_rate(rest)
             if not amount or not src:
                 self.broadcast({"type": "note", "text": "Формат: !курс 100 usd [rub]"})
-                return True
+                return
             self.spawn(self._rate_reply(amount, src, dst))
-            return True
-        if cmd in ("!перевод", "!переведи", "!translate", "!tr"):
-            self.broadcast(event)
+            return
+        if cmd == "translate":
             if not rest:
                 self.broadcast({"type": "note", "text": "Формат: !перевод привет [en]"})
-                return True
+                return
             rest, lang = featlib.split_language(rest, "ru")
             self.spawn(self._translate_reply(rest, lang))
-            return True
-        if cmd in ("!выделить", "!highlight") and mod:
-            self.broadcast(event)
+            return
+        if cmd == "highlight":
             self.broadcast({"type": "chat", "id": uuid.uuid4().hex, "user": m["name"],
                             "color": m["color"], "text": rest or "(пусто)", "tts": False,
                             "highlight": True})
-            return True
-        if cmd in ("!закрепить", "!pin") and mod:
-            self.broadcast(event)
+            return
+        if cmd == "pin":
             self.broadcast({"type": "pin", "text": rest or "(пусто)", "user": m["name"]})
-            return True
-        if cmd in ("!брб", "!brb") and mod:
-            self.broadcast(event)
+            return
+        if cmd == "brb":
             seconds, message = featlib.parse_brb(rest)
             self.set_brb(seconds, message)
-            return True
-        if cmd in ("!таймаут", "!timeout", "!то") and mod:
-            self.broadcast(event)
+            return
+        if cmd == "timeout":
             parts = rest.split()
             if not parts:
                 self.broadcast({"type": "note", "text": "Формат: !таймаут ник 600"})
-                return True
+                return
             target = parts[0].lstrip("@").lower()
             seconds = 600
             if len(parts) > 1 and parts[1].isdigit():
                 seconds = max(1, min(int(parts[1]), 1209600))
             self.spawn(self._timeout_reply(target, seconds))
-            return True
-        return False
+            return
 
     async def _timeout_reply(self, login, seconds):
         """Ответ на команду таймаута."""
