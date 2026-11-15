@@ -38,6 +38,7 @@ venv\Scripts\python.exe tools\bench_queue.py         # замер цикла о�
 venv\Scripts\python.exe tools\ab_compare.py           # слепой A/B наборов качества (оффлайн)
 venv\Scripts\python.exe tools\profile_pipeline.py      # baseline конвейера через HTTP (нужен сервер)
 venv\Scripts\python.exe tools\profile_synthesis.py     # профиль XTTS по фазам (нужна видеокарта)
+B:\projects\TwitchTTS\cosyvoice\env\Scripts\python.exe tools\profile_cosyvoice.py   # профиль CosyVoice (в окружении CosyVoice)
 venv\Scripts\python.exe tools\test_emotes.py         # эмоции и разбор текста
 venv\Scripts\python.exe tools\test_langs.py          # языки
 venv\Scripts\python.exe tools\audit_emotes.py        # сквозная проверка эмоций (нужен сервер)
