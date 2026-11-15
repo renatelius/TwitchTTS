@@ -902,10 +902,7 @@ class App:
             if not rest:
                 self.broadcast({"type": "note", "text": "Формат: !перевод привет [en]"})
                 return True
-            lang = "ru"
-            parts = rest.rsplit(" ", 1)
-            if len(parts) == 2 and len(parts[1]) <= 5 and parts[1].isalpha() and parts[1].lower() != "ru":
-                lang, rest = parts[1].lower(), parts[0]
+            rest, lang = featlib.split_language(rest, "ru")
             self.spawn(self._translate_reply(rest, lang))
             return True
         if cmd in ("!выделить", "!highlight") and mod:

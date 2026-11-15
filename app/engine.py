@@ -413,8 +413,13 @@ class MockEngine(BaseEngine):
             f.write(str(latents["freq"]))
 
     def load_latents(self, path):
-        with open(path, encoding="utf-8") as f:
-            return {"freq": float(f.read())}
+        try:
+            with open(path, encoding="utf-8") as f:
+                return {"freq": float(f.read())}
+        except (UnicodeDecodeError, ValueError):
+            # слепок сделан настоящим XTTS и это двоичный файл - частота из имени
+            name = Path(path).stem
+            return {"freq": 180 + (sum(map(ord, name)) % 200)}
 
     def synthesize(self, segs, latents, out_path, speed=1.0, pitch=0.0, style=None):
         parts = []

@@ -37,9 +37,27 @@ EVENT_LABELS = {
 # что делать с событием, если правило не задано
 DEFAULT_RULES = {"raid": "announce", "sub": "announce", "gift": "announce", "bits": "ignore"}
 
+# языки для команды !перевод
+LANG_CODES = {
+    "ru", "en", "de", "fr", "es", "it", "pt", "pl", "cs", "tr", "ar", "zh", "ja", "ko",
+    "uk", "be", "fi", "sv", "no", "da", "nl", "hu", "el", "he", "hi", "th", "vi", "id",
+    "ro", "bg", "sr", "hr", "sk", "sl", "et", "lv", "lt", "fa", "ur", "ms", "ca", "eu",
+    "gl", "af", "sw", "ta", "te", "ml", "mr", "bn", "pa", "gu", "km", "lo", "my", "ka",
+    "hy", "az", "kk", "uz", "mn",
+}
+
 _UA = "TwitchTTS/1.0"
 _RATE_CACHE = {"at": 0.0, "rates": {}}
 _TRANSLATE_CACHE = {}
+
+
+def split_language(text, default="ru"):
+    """'привет en' -> ('привет', 'en'). Неизвестный хвост остаётся частью текста."""
+    text = (text or "").strip()
+    parts = text.rsplit(" ", 1)
+    if len(parts) == 2 and parts[1].strip().lower() in LANG_CODES:
+        return parts[0].strip(), parts[1].strip().lower()
+    return text, default
 
 
 def clean_system(text):

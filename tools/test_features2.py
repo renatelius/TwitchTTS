@@ -48,6 +48,20 @@ check("курс: неизвестная валюта", featlib.convert(100, "USD
 check("курс: одинаковые валюты", featlib.convert(100, "USD", "USD"), 100.0)
 featlib.rates = _saved_rates
 
+# --- язык перевода ---
+check("перевод: код языка в конце", featlib.split_language("hello en"), ("hello", "en"))
+check("перевод: неизвестный хвост - часть текста", featlib.split_language("hello world"), ("hello world", "ru"))
+check("перевод: без языка", featlib.split_language("привет"), ("привет", "ru"))
+check("перевод: немецкий", featlib.split_language("привет de"), ("привет", "de"))
+
+# --- заглушка: слепок от настоящего XTTS ---
+import tempfile
+from engine import MockEngine
+_tmp = os.path.join(tempfile.mkdtemp(), "latents.pth")
+with open(_tmp, "wb") as _f:
+    _f.write(b"\x80\x03\x00binary")
+check("заглушка: бинарный слепок читается", MockEngine().load_latents(_tmp)["freq"] > 0, True)
+
 # --- перевод ---
 _saved_get = featlib._get_json
 featlib._get_json = lambda url, timeout=8: [[["привет", "hello", None, None, 10]], None, "en"]
