@@ -36,6 +36,8 @@ venv\Scripts\python.exe tools\test_imports.py        # циклы импорто
 venv\Scripts\python.exe tools\test_queue.py           # очередь озвучки (без сервера)
 venv\Scripts\python.exe tools\test_synthesis.py       # модуль синтеза (без моделей)
 venv\Scripts\python.exe tools\bench_queue.py         # замер цикла очереди (нужен сервер)
+venv\Scripts\python.exe tools\measure_warmup.py    # ранний старт CosyVoice: таймлайн и видеопамять
+venv\Scripts\python.exe tools\bench_warmup.py      # первая реплика с ранним стартом и без него
 venv\Scripts\python.exe tools\ab_compare.py           # слепой A/B наборов качества (оффлайн)
 venv\Scripts\python.exe tools\profile_pipeline.py      # baseline конвейера через HTTP (нужен сервер)
 venv\Scripts\python.exe tools\profile_synthesis.py     # профиль XTTS по фазам (нужна видеокарта)
@@ -84,7 +86,8 @@ venv\Scripts\python.exe tools\golden_queue.py --base http://127.0.0.1:8769 --che
 
 `golden_queue.py` сначала прогревает движок: в режиме заглушки XTTS настоящий,
 а CosyVoice — нет, поэтому первый синтез поднимает его воркер и занимает
-десятки секунд. `golden_api.py` ждёт пустой очереди и возвращает настройки
+десятки секунд. Ранний старт CosyVoice в заглушке выключен (`TTS_MOCK=1`),
+чтобы тесты не занимали видеопамять. `golden_api.py` ждёт пустой очереди и возвращает настройки
 как были — иначе слепок затирал бы громкость и скорость пользователя.
 
 Слепки не зависят от личных настроек: `golden_settings.json` хранит только
