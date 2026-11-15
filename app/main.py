@@ -41,6 +41,7 @@ import features as featlib  # noqa: E402
 import emotes as emotelib  # noqa: E402
 import langs  # noqa: E402
 from twitch import TwitchChat, normalize_channel  # noqa: E402
+import twitch_api as tapilib  # noqa: E402
 from voices import VoiceError, VoiceStore, decode as decode_audio, measure_f0  # noqa: E402
 from rvc_train import RvcTrainer, TrainError  # noqa: E402
 
@@ -115,6 +116,11 @@ DEFAULTS = {
     "event_rules": {},         # правила по событиям: рейд/подписка/битсы -> announce|speak|ignore
     "brb_seconds": 0,          # таймер BRB-экрана, секунд
     "brb_message": "Скоро вернусь",
+    "twitch_client_id": "",     # Client ID приложения Twitch (нужен для API)
+    "twitch_token": "",         # OAuth-токен Twitch: модератора или стримера
+    "highlight_reward": "",     # название награды, сообщения из которой выделяются
+    "speak_reward": "",         # название награды, сообщения из которой озвучиваются
+    "follow_rule": "ignore",    # реакция на нового подписчика: ignore|announce|speak
 }
 
 def voice_blocked(settings, voice):
@@ -220,6 +226,12 @@ class App:
         self.last_spoke = {}
         self.loop = None
         self.brb = {"until": 0.0, "message": self.settings.get("brb_message") or "Скоро вернусь"}
+        self.tapi = tapilib.TwitchApi(self.settings.get("twitch_client_id", ""),
+                                      self.settings.get("twitch_token", ""))
+        self._rewards = {}        # id награды -> название
+        self._rewards_at = 0.0
+        self._followers = set()
+        self._followers_ready = False
 
     # ---------- события для браузера ----------
     def broadcast(self, event):
@@ -425,9 +437,20 @@ class App:
         if self.handle_command(m, first_raw.lower(), rest_raw, event):
             return
 
-        # сообщение, отправленное за награду, можно выделить
-        if m.get("is_reward") and s.get("highlight_rewards"):
-            event["highlight"] = True
+        # сообщение, отправленное за награду: выделяем и/или озвучиваем по названию
+        reward_speak = False
+        if m.get("is_reward"):
+            self.api_sync()
+            title = self.reward_title(m.get("reward_id", ""))
+            if title:
+                event["reward"] = title
+            low_title = title.lower()
+            if low_title and low_title == str(s.get("highlight_reward") or "").strip().lower():
+                event["highlight"] = True
+            if low_title and low_title == str(s.get("speak_reward") or "").strip().lower():
+                reward_speak = True
+            elif s.get("highlight_rewards"):
+                event["highlight"] = True
 
         note = ""
         if s.get("muted"):
@@ -443,7 +466,7 @@ class App:
         elif s["skip_digits"] and text.strip().isdigit():
             # голоса в опросах: зритель пишет "1", "2" или "3" - вслух это не читаем
             note = "цифра"
-        elif m.get("is_reward") and s["skip_rewards"]:
+        elif m.get("is_reward") and s["skip_rewards"] and not reward_speak:
             note = "награда за баллы"
         elif s["audience"] == "subs" and not (m["is_sub"] or m["is_vip"] or m["is_mod"] or m["is_broadcaster"]):
             note = "только для подписчиков"
@@ -763,6 +786,71 @@ class App:
             self.push_status()
             self.cleanup_cache()
 
+    # ---------- Twitch API ----------
+    def api_ready(self):
+        """Задан ли Client ID и токен Twitch."""
+        return bool(str(self.settings.get("twitch_client_id") or "").strip()
+                    and str(self.settings.get("twitch_token") or "").strip())
+
+    def api_sync(self):
+        """Обновляет список наград канала (кэш на 5 минут)."""
+        self.tapi = tapilib.TwitchApi(self.settings.get("twitch_client_id", ""),
+                                      self.settings.get("twitch_token", ""))
+        if not self.tapi.ready:
+            return
+        now = time.time()
+        if now - self._rewards_at < 300:
+            return
+        self._rewards_at = now
+        try:
+            bid = self.tapi.user_id(self.settings.get("channel", ""))
+            if not bid:
+                return
+            for reward in self.tapi.rewards(bid):
+                self._rewards[reward.get("id", "")] = reward.get("title", "")
+        except Exception as e:
+            log.warning("не удалось обновить награды Twitch: %r", e)
+
+    def reward_title(self, reward_id):
+        """Название награды по её id (из кэша Twitch API)."""
+        return self._rewards.get(reward_id or "", "")
+
+    def _do_timeout(self, login, seconds):
+        """Таймаут зрителя через Twitch API. Возвращает (получилось, текст)."""
+        if not self.api_ready():
+            return False, "Нужен Client ID и токен Twitch (Настройки -> События и интеграции)."
+        try:
+            bid = self.tapi.user_id(self.settings.get("channel", ""))
+            uid = self.tapi.user_id(login)
+            if not uid:
+                return False, "Зритель %s не найден." % login
+            self.tapi.timeout(bid, uid, seconds)
+        except Exception as e:
+            log.warning("таймаут не выполнен: %r", e)
+            return False, "Таймаут не выполнен: %s" % e
+        return True, "%s получил таймаут на %d с." % (login, int(seconds))
+
+    def _fetch_new_followers(self):
+        """Новые подписчики канала (список имён)."""
+        if not self.api_ready() or not self.settings.get("channel"):
+            return []
+        bid = self.tapi.user_id(self.settings.get("channel", ""))
+        if not bid:
+            return []
+        ids = set()
+        names = {}
+        for f in self.tapi.followers(bid):
+            uid = f.get("user_id", "")
+            ids.add(uid)
+            names[uid] = f.get("user_login") or f.get("user_name") or uid
+        if not self._followers_ready:
+            self._followers = ids
+            self._followers_ready = True
+            return []
+        new = [names.get(u, u) for u in (ids - self._followers)]
+        self._followers = ids
+        return new
+
     # ---------- события, команды, BRB ----------
     def spawn(self, coro):
         """Запускает корутину из обработчика чата."""
@@ -835,7 +923,55 @@ class App:
             seconds, message = featlib.parse_brb(rest)
             self.set_brb(seconds, message)
             return True
+        if cmd in ("!таймаут", "!timeout", "!то") and mod:
+            self.broadcast(event)
+            parts = rest.split()
+            if not parts:
+                self.broadcast({"type": "note", "text": "Формат: !таймаут ник 600"})
+                return True
+            target = parts[0].lstrip("@").lower()
+            seconds = 600
+            if len(parts) > 1 and parts[1].isdigit():
+                seconds = max(1, min(int(parts[1]), 1209600))
+            self.spawn(self._timeout_reply(target, seconds))
+            return True
         return False
+
+    async def _timeout_reply(self, login, seconds):
+        """Ответ на команду таймаута."""
+        try:
+            loop = asyncio.get_running_loop()
+            done, text = await loop.run_in_executor(None, self._do_timeout, login, seconds)
+        except Exception as e:
+            log.warning("таймаут не выполнен: %r", e)
+            done, text = False, "Таймаут не выполнен: %s" % e
+        await self._reply(text, speak=False)
+        return done
+
+    async def poll_followers(self):
+        """Следит за новыми подписчиками (нужен токен Twitch)."""
+        while True:
+            await asyncio.sleep(60)
+            if not self.api_ready() or not self.settings.get("channel"):
+                continue
+            rule = str(self.settings.get("follow_rule") or "ignore").lower()
+            if rule == "ignore":
+                continue
+            try:
+                loop = asyncio.get_running_loop()
+                names = await loop.run_in_executor(None, self._fetch_new_followers)
+            except Exception as e:
+                log.warning("ошибка проверки подписчиков: %r", e)
+                continue
+            for name in names[:5]:
+                text = "Новый подписчик: %s" % name
+                ev = {"type": "chat", "id": uuid.uuid4().hex, "user": name, "color": "#34d399",
+                      "text": text, "tts": False, "event": "follow", "highlight": True}
+                self.broadcast(ev)
+                if rule == "speak":
+                    voice = self.default_voice()
+                    if voice:
+                        self.enqueue(ev["id"], name, text, voice)
 
     async def _reply(self, text, speak=True):
         """Ответ в чат и (по желанию) голосом."""
@@ -929,7 +1065,9 @@ class App:
         threading.Thread(target=self.engine.load, daemon=True).start()
         self.start_rvc()
         self.detect_cosyvoice()
-        self.tasks = [asyncio.create_task(self.worker()), asyncio.create_task(self.watch_engine())]
+        self.tasks = [asyncio.create_task(self.worker()),
+                      asyncio.create_task(self.watch_engine()),
+                      asyncio.create_task(self.poll_followers())]
         if self.settings["autoconnect"] and self.settings["channel"]:
             await self.twitch.connect(self.settings["channel"])
 

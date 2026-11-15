@@ -280,7 +280,33 @@
         </select>
       </div>
     </div>
-    <div class="hint">События читаются из чата Twitch: рейд, подписка, подарочная подписка, битсы. Фоллов в чате не видно - для них нужен токен Twitch API. Сообщения модератора: <b>!выделить текст</b>, <b>!закрепить текст</b>, <b>!брб 10</b>.</div>
+    <div class="field" style="margin-top:14px">
+      <label for="s_twitch_client_id">Twitch Client ID — нужен для Twitch API</label>
+      <input type="text" id="s_twitch_client_id" placeholder="из консоли разработчика Twitch">
+    </div>
+    <div class="field">
+      <label for="s_twitch_token">OAuth-токен Twitch (модератора или стримера)</label>
+      <input type="password" id="s_twitch_token" placeholder="токен из консоли разработчика">
+    </div>
+    <div class="row field">
+      <div>
+        <label for="s_follow_rule">Новый подписчик</label>
+        <select id="s_follow_rule">
+          <option value="ignore">Не реагировать</option>
+          <option value="announce">Написать в чат</option>
+          <option value="speak">Озвучить</option>
+        </select>
+      </div>
+      <div>
+        <label for="s_highlight_reward">Награда, сообщения из которой выделять</label>
+        <input type="text" id="s_highlight_reward" placeholder="название награды">
+      </div>
+    </div>
+    <div class="field">
+      <label for="s_speak_reward">Награда, сообщения из которой озвучивать</label>
+      <input type="text" id="s_speak_reward" placeholder="название награды">
+    </div>
+    <div class="hint">Без токена работают события из чата: рейд, подписка, подарочная подписка, битсы. С Client ID и токеном дополнительно доступны новые подписчики, награды по названию и таймаут зрителя (<b>!таймаут ник 600</b>). Токен берётся в консоли разработчика Twitch с областями <code>moderator:read:followers</code>, <code>channel:read:redemptions</code>, <code>moderator:manage:banned_users</code>. Модераторские команды: <b>!выделить текст</b>, <b>!закрепить текст</b>, <b>!брб 10</b>.</div>
   </div>
 
   <div class="row" style="justify-content:flex-end; margin-top:20px">
@@ -519,7 +545,7 @@ async function loadEmotesInfo(){
 }
 
 const numeric = ['max_len', 'max_queue', 'cooldown'], bools = ['read_names', 'random_voice', 'skip_commands', 'skip_digits', 'skip_rewards', 'autoconnect', 'emotes', 'fix_layout', 'player_only', 'highlight_rewards'],
-      lists = ['ignore_users', 'blocked_words', 'blocked_voices', 'tts_allow', 'tts_deny'], selects = ['language', 'audience', 'me_voice', 'style'];
+      lists = ['ignore_users', 'blocked_words', 'blocked_voices', 'tts_allow', 'tts_deny'], selects = ['language', 'audience', 'me_voice', 'style', 'follow_rule'];
 $('settingsBtn').onclick = () => {
   numeric.concat(selects).forEach(k => $('s_' + k).value = settings[k] == null ? '' : settings[k]);
   $('s_tts_prefix').value = settings.tts_prefix || '';
@@ -528,6 +554,10 @@ $('settingsBtn').onclick = () => {
   $('s_rule_sub').value = rules.sub || 'ignore';
   $('s_rule_gift').value = rules.gift || 'ignore';
   $('s_rule_bits').value = rules.bits || 'ignore';
+  $('s_twitch_client_id').value = settings.twitch_client_id || '';
+  $('s_twitch_token').value = settings.twitch_token || '';
+  $('s_highlight_reward').value = settings.highlight_reward || '';
+  $('s_speak_reward').value = settings.speak_reward || '';
   bools.forEach(k => $('s_' + k).checked = settings[k]);
   lists.forEach(k => $('s_' + k).value = settings[k].join(', '));
   $('s_speed').value = Math.round(settings.speed * 100); $('speedVal').textContent = settings.speed.toFixed(2) + '×';
@@ -547,6 +577,10 @@ $('dlgSave').onclick = async () => {
     raid: $('s_rule_raid').value, sub: $('s_rule_sub').value,
     gift: $('s_rule_gift').value, bits: $('s_rule_bits').value
   };
+  d.twitch_client_id = $('s_twitch_client_id').value.trim();
+  d.twitch_token = $('s_twitch_token').value.trim();
+  d.highlight_reward = $('s_highlight_reward').value.trim();
+  d.speak_reward = $('s_speak_reward').value.trim();
   await api('/api/settings', d);
   $('dlg').close();
 };
