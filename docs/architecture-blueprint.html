@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TwitchTTS — архитектура после рефакторинга</title>
+<style>
+  :root{
+    --bg:#0e1117; --panel:#161b22; --panel2:#1c2230; --line:#2a3241;
+    --txt:#e6edf3; --dim:#9aa7b8; --acc:#4cc2ff; --ok:#3fb950; --warn:#e3b341; --bad:#f85149;
+    --mono:'JetBrains Mono',Consolas,'Courier New',monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);font:15px/1.6 -apple-system,'Segoe UI',Roboto,sans-serif}
+  .wrap{max-width:1180px;margin:0 auto;padding:36px 22px 80px}
+  h1{font-size:30px;margin:0 0 6px}
+  h2{font-size:21px;margin:44px 0 14px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+  h3{font-size:16px;margin:22px 0 8px;color:var(--acc)}
+  .sub{color:var(--dim);margin:0 0 26px}
+  .grid{display:grid;gap:14px}
+  .g2{grid-template-columns:repeat(auto-fit,minmax(320px,1fr))}
+  .g3{grid-template-columns:repeat(auto-fit,minmax(230px,1fr))}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px 18px}
+  .card h4{margin:0 0 8px;font-size:14px;letter-spacing:.02em;text-transform:uppercase;color:var(--dim)}
+  .tag{display:inline-block;font-size:11px;padding:2px 8px;border-radius:20px;margin-right:6px;vertical-align:middle;font-weight:600}
+  .t-ok{background:rgba(63,185,80,.16);color:var(--ok);border:1px solid rgba(63,185,80,.4)}
+  .t-warn{background:rgba(227,179,65,.16);color:var(--warn);border:1px solid rgba(227,179,65,.4)}
+  .t-bad{background:rgba(248,81,73,.16);color:var(--bad);border:1px solid rgba(248,81,73,.4)}
+  .t-acc{background:rgba(76,194,255,.14);color:var(--acc);border:1px solid rgba(76,194,255,.4)}
+  pre{background:#0b0e14;border:1px solid var(--line);border-radius:8px;padding:14px;overflow:auto;font:12.5px/1.5 var(--mono);color:#c9d5e3;margin:0}
+  table{width:100%;border-collapse:collapse;font-size:13.5px}
+  th,td{border-bottom:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+  th{color:var(--dim);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+  td code,p code,li code{background:#0b0e14;padding:1px 6px;border-radius:4px;font:12px var(--mono);color:var(--acc)}
+  .kv{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px dashed var(--line)}
+  .kv:last-child{border:0}
+  .kv b{font:13px var(--mono);color:var(--acc);white-space:nowrap}
+  ul{margin:8px 0 0;padding-left:20px}
+  li{margin:4px 0}
+  .num{font:13px var(--mono);color:var(--acc)}
+  .flow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:10px 0}
+  .flow span{background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:5px 10px;font:12px var(--mono)}
+  .flow i{color:var(--dim);font-style:normal}
+  footer{margin-top:50px;padding-top:16px;border-top:1px solid var(--line);color:var(--dim);font-size:13px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>TwitchTTS — архитектура после рефакторинга</h1>
+  <p class="sub">Чертеж целевой архитектуры: что уже сделано, что меняется дальше и как это проверяется.
+  Дата: 15.11.2026 · репозиторий <code>B:\projects\TwitchTTS\TwitchTTS</code> · ветка <code>main</code></p>
+
+  <div class="grid g3">
+    <div class="card"><h4>Сделано</h4>
+      <div class="kv"><span>Шаг A — правила чата</span><b>9faa05f</b></div>
+      <div class="kv"><span>Шаг B — HTTP-слой</span><b>4f89273</b></div>
+      <div class="kv"><span>Тест: мигающий аудит</span><b>dc145cd</b></div>
+    </div>
+    <div class="card"><h4>Масштаб</h4>
+      <div class="kv"><span>main.py было → стало</span><b>1632 → 1016</b></div>
+      <div class="kv"><span>app/api.py</span><b>658 строк</b></div>
+      <div class="kv"><span>app/chat_rules.py</span><b>230 строк</b></div>
+    </div>
+    <div class="card"><h4>Страховка</h4>
+      <div class="kv"><span>Слепок чата</span><b>47/47</b></div>
+      <div class="kv"><span>Слепок HTTP</span><b>37 маршрутов / 25 запросов</b></div>
+      <div class="kv"><span>Наборов тестов</span><b>13 · провалов 0</b></div>
+    </div>
+  </div>
+
+  <h2>1. Идея</h2>
+  <div class="card">
+    <p style="margin-top:0">Локальное монолитное приложение с изолированными компонентами. Не микросервисы:
+    всё живёт в одном процессе, кроме двух ML-воркеров, у которых собственные окружения.</p>
+    <p style="margin-bottom:0">Главный принцип — <b>разделение по швам, а не по файлам</b>: каждый модуль отвечает за одно
+    решение и получает состояние явно. Правило: <i>«исправление одной части не должно ломать другую»</i>.
+    Поведение продукта при разбиении не меняется — это проверяется золотыми слепками, а не на глаз.</p>
+  </div>
+
+  <h2>2. Карта модулей сейчас</h2>
+  <pre>app/
+  main.py        1016  состояние, очередь, синтез, Twitch API, сборка приложения
+  api.py          658  HTTP: страницы, /api/*, SSE /events, отдача /audio      [новый]
+  chat_rules.py   230  чистые правила чата: decide(msg, ctx) -> Decision       [новый]
+  paths.py         12  общие пути: DATA, CACHE, TMP, WEB                      [новый]
+  engine.py       437  XTTS v2: загрузка, слепки голоса, синтез
+  voices.py       590  голоса: клипы, слепки, метаданные, копирование тона
+  emotes.py       330  эмоции: ремарки, записи sounds/, вокализации
+  textproc.py     294  чистка текста, разбиение на фразы, языки
+  rvc.py/rvc_train.py/rvc_worker.py   RVC: мост, обучение, воркер
+  cosyvoice.py/cosyvoice_worker.py   CosyVoice 3: ленивый мост и воркер
+  features.py     220  курс валют, перевод, события чата
+  styles.py        99  стили речи
+  twitch.py/twitch_api.py             чат Twitch и API (награды, подписчики)
+  chat_rules -&gt; features, styles, textproc
+  api       -&gt; cosyvoice, paths, rvc, rvc_train, styles, textproc, twitch, voices
+  main     -&gt; все остальные</pre>
+  <div class="grid g2">
+    <div class="card"><h4>Найдено при аудите</h4>
+      <ul>
+        <li><span class="tag t-bad">цикл</span> <code>textproc ↔ emotes</code> — взаимные импорты, разорвать в шаге D/E</li>
+        <li><span class="tag t-warn">глобалы</span> только константы и кэши курса/перевода в <code>features</code></li>
+        <li><span class="tag t-warn">дубль</span> <code>MAX_UPLOAD</code> объявлен в <code>paths.py</code> и <code>rvc_train.py</code></li>
+        <li><span class="tag t-ok">логгер</span> в <code>main.py</code> отсутствовал — <code>log.exception()</code> ронял очередь при ошибке синтеза</li>
+      </ul>
+    </div>
+    <div class="card"><h4>Тяжёлые места</h4>
+      <table>
+        <tr><th>Функция</th><th>Строк</th><th>Назначение</th></tr>
+        <tr><td><code>_synth</code></td><td class="num">73</td><td>синтез: чистка → движок → wav</td></tr>
+        <tr><td><code>run_command</code></td><td class="num">61</td><td>исполнение команды чата</td></tr>
+        <tr><td><code>on_chat</code></td><td class="num">59</td><td>приём сообщения, решение</td></tr>
+        <tr><td><code>_render_cosy</code></td><td class="num">57</td><td>рендер CosyVoice</td></tr>
+        <tr><td><code>worker</code></td><td class="num">33</td><td>цикл очереди</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <h2>3. Целевая структура</h2>
+  <pre>app/
+  main.py           точка входа: сборка приложения, CORS, запуск
+  application.py    App: состояние, жизненный цикл, координация
+  api.py            HTTP-слой: build_routes(state)
+  chat_rules.py     чистые правила чата: decide()
+  settings.py       настройки: defaults, загрузка, нормализация, секреты
+  queue.py          очередь: порядок, skip, clear, состояние
+  synthesis.py      синтез: XTTS / CosyVoice / RVC за единым интерфейсом
+  voices.py  engine.py  emotes.py  textproc.py  styles.py  features.py
+  langs.py   twitch.py  twitch_api.py  rvc*.py  cosyvoice*.py
+  paths.py
+web/                страницы без фреймворков
+tools/              тесты, аудиты, золотые слепки, контроль качества
+docs/               архитектура, контекст, ADR</pre>
+  <p style="color:var(--dim)">Ориентир, а не догма: пакеты <code>api/</code>, <code>core/</code>, <code>tts/</code> из ТЗ не создаются —
+  они добавят пустые модули без выигрыша. Разделение идёт по границам ответственности внутри <code>app/</code>.</p>
+
+  <h2>4. Швы между компонентами</h2>
+  <table>
+    <tr><th>Шов</th><th>Сигнатура</th><th>Сделано</th></tr>
+    <tr><td>Правила чата</td><td><code>decide(msg, ctx) -&gt; Decision</code></td><td><span class="tag t-ok">да</span> <span class="num">9faa05f</span></td></tr>
+    <tr><td>HTTP-слой</td><td><code>build_routes(state) -&gt; [Route]</code></td><td><span class="tag t-ok">да</span> <span class="num">4f89273</span></td></tr>
+    <tr><td>Настройки</td><td><code>Settings(path)</code> + <code>apply(data)</code></td><td><span class="tag t-warn">следующий</span></td></tr>
+    <tr><td>Очередь</td><td><code>enqueue(job)</code>, <code>skip()</code>, <code>clear()</code></td><td><span class="tag t-acc">позже</span></td></tr>
+    <tr><td>Синтез</td><td><code>synthesize(job) -&gt; SynthesisResult</code></td><td><span class="tag t-acc">позже</span></td></tr>
+    <tr><td>Движки</td><td><code>SynthesisEngine.synthesize()</code> (XTTS / CosyVoice / RVC)</td><td><span class="tag t-acc">позже</span></td></tr>
+    <tr><td>Воркеры</td><td>текстовый IPC: <code>@@RVC@@</code> / <code>@@CV@@</code></td><td><span class="tag t-ok">без изменений</span></td></tr>
+  </table>
+
+  <h2>5. Потоки данных</h2>
+  <h3>Сообщение Twitch</h3>
+  <div class="flow">
+    <span>twitch.py</span><i>→</i><span>on_chat</span><i>→</i><span>chat_rules.decide</span><i>→</i><span>Decision</span><i>→</i><span>App: очередь</span><i>→</i><span>worker</span><i>→</i><span>synthesis</span><i>→</i><span>wav</span><i>→</i><span>SSE /events</span><i>→</i><span>браузер</span>
+  </div>
+  <h3>HTTP-запрос</h3>
+  <div class="flow">
+    <span>браузер</span><i>→</i><span>api.build_routes</span><i>→</i><span>обработчик (state)</span><i>→</i><span>сервис</span><i>→</i><span>ok()/fail()</span>
+  </div>
+
+  <h2>6. Производительность и GPU</h2>
+  <div class="grid g2">
+    <div class="card"><h4>Baseline (замерено, RTX 5070 12 ГБ)</h4>
+      <table>
+        <tr><th>Метрика</th><th>Значение</th></tr>
+        <tr><td>Первая фраза (прогрев модели)</td><td class="num">20.1 с</td></tr>
+        <tr><td>Обычная фраза (7.8 с звука)</td><td class="num">7.9 с</td></tr>
+        <tr><td>RTF (генерация / длительность)</td><td class="num">≈ 1.0</td></tr>
+        <tr><td>GPU во время синтеза</td><td class="num">96 %</td></tr>
+        <tr><td>VRAM в простое</td><td class="num">3.9 ГБ</td></tr>
+        <tr><td>VRAM в пике синтеза</td><td class="num">8.0 ГБ</td></tr>
+        <tr><td>Ожидание в очереди на сообщение</td><td class="num">≈ 2 × длительность</td></tr>
+      </table>
+      <p style="color:var(--dim);margin-bottom:0">Причина долгого ответа найдена: воркер ждёт конца звучания текущего
+      сообщения и только потом берёт следующее. Ускорение — не в модулях, а в конвейере.</p>
+    </div>
+    <div class="card"><h4>Рычаги (отдельный этап, каждый с замерами)</h4>
+      <ul>
+        <li><b>Предгенерация</b> следующего сообщения во время звучания текущего — снимает время прослушивания с критического пути (ожидаемо ×2 по задержке).</li>
+        <li><b>fp16 для XTTS</b> — быстрее и вдвое легче по VRAM, <span class="tag t-warn">только после слепого A/B</span>.</li>
+        <li><b>Пакетный синтез</b> длинных фраз (разбиение на предложения уже есть).</li>
+        <li><b>Выгрузка RVC/CosyVoice</b> из VRAM, когда они не обучаются.</li>
+        <li><b>Устранение цикла textproc ↔ emotes</b> и лишних копий аудио.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="card">
+    <h4>Правило качества</h4>
+    <p style="margin:0">Приоритет неизменен: <b>качество голоса → функциональность → стабильность → безопасность → ресурсы → скорость → удобство разработки</b>.
+    Точность вычислений, sampling и алгоритмы движков не трогаем без доказательства. Контрольный набор:
+    <code>tools/quality_baseline.py</code> — 8 фиксированных текстов, один голос, манифест с параметрами;
+    «до» и «после» сравниваются вслепую.</p>
+  </div>
+
+  <h2>7. Безопасность и данные</h2>
+  <div class="card">
+    <ul style="margin:0">
+      <li><span class="tag t-bad">находка</span> <code>twitch_token</code> и <code>twitch_client_id</code> отдаются в <code>/api/state</code> и в SSE-событии <code>settings</code>.
+      CORS разрешает origin <code>null</code> (страница с диска), значит любой открытый локальный HTML может прочитать токен. <b>Нужен ваш выбор</b>: маскировать секрет в ответах (контракт меняется) или оставить.</li>
+      <li><span class="tag t-ok">в порядке</span> загрузки ограничены 500 МБ и 40 файлами, путь к wav проверяется на <code>/</code> и <code>\</code>, приватные пути и CORS ограничены localhost.</li>
+      <li><span class="tag t-ok">в порядке</span> пользовательские данные (голоса, слепки, записи, настройки) при разбиении не переносятся и не переписываются.</li>
+    </ul>
+  </div>
+
+  <h2>8. Последовательность внедрения</h2>
+  <table>
+    <tr><th>Шаг</th><th>Что</th><th>Шов</th><th>Проверка</th><th>Статус</th></tr>
+    <tr><td>A</td><td>Правила чата → <code>app/chat_rules.py</code></td><td><code>decide(msg, ctx)</code></td><td>слепок 47 кейсов</td><td><span class="tag t-ok">готово</span></td></tr>
+    <tr><td>B</td><td>HTTP-слой → <code>app/api.py</code>, <code>app/paths.py</code></td><td><code>build_routes(state)</code></td><td>слепок 37 маршрутов / 25 запросов</td><td><span class="tag t-ok">готово</span></td></tr>
+    <tr><td>D</td><td>Настройки → <code>app/settings.py</code></td><td><code>Settings</code>, <code>apply(data)</code></td><td>слепок 26 случаев нормализации</td><td><span class="tag t-warn">в работе</span></td></tr>
+    <tr><td>E</td><td>Разрыв цикла <code>textproc ↔ emotes</code></td><td>общие утилиты в отдельном модуле</td><td>наборы тестов + импорт-граф</td><td><span class="tag t-acc">далее</span></td></tr>
+    <tr><td>F</td><td>Очередь → <code>app/queue.py</code></td><td><code>enqueue/skip/clear</code></td><td>слепок очереди + живой чат</td><td><span class="tag t-acc">далее</span></td></tr>
+    <tr><td>G</td><td>Синтез → <code>app/synthesis.py</code></td><td><code>synthesize(job)</code></td><td>контроль качества A/B</td><td><span class="tag t-acc">далее</span></td></tr>
+    <tr><td>H</td><td>Производительность и GPU</td><td>—</td><td>baseline до/после, VRAM, качество</td><td><span class="tag t-acc">отдельный этап</span></td></tr>
+  </table>
+  <p style="color:var(--dim)">Каждый шаг — отдельный коммит, поведение не меняется, тесты и слепки обязательны.</p>
+
+  <h2>9. Definition of Done</h2>
+  <div class="card">
+    <ul style="margin:0">
+      <li>Функциональность, API-контракты и настройки совместимы с текущей версией.</li>
+      <li>Нет циклических импортов, глобального состояния и дублирования путей.</li>
+      <li>13 наборов тестов + 3 золотых слепка зелёные на каждом шаге.</li>
+      <li>Качество голоса подтверждено контрольным набором (до/после).</li>
+      <li>Скорость и VRAM измерены до и после — без ухудшения качества.</li>
+      <li>Документация соответствует коду; на каждое существенное решение — ADR.</li>
+    </ul>
+  </div>
+
+  <footer>Документ отражает состояние репозитория на 15.11.2026: коммиты <code>9faa05f</code>, <code>4f89273</code>, <code>dc145cd</code>.
+  Все цифры — результат замеров на этой машине, а не оценки.</footer>
+</div>
+</body>
+</html>

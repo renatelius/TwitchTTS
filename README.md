@@ -408,7 +408,7 @@ TwitchTTS/
 └── ОПРОС-ОЗВУЧКА.txt      # подробно про опрос и озвучку объявлений
 ```
 
-Подробно о модулях и потоках данных — в [ARCHITECTURE.md](ARCHITECTURE.md).
+Подробно о модулях и потоках данных — в [docs/architecture.md](docs/architecture.md).
 
 ## Для разработчиков
 
