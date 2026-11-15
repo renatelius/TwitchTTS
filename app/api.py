@@ -117,7 +117,7 @@ async def events(state, request):
 
 async def api_state(state, request):
     a = state
-    return ok(status=a.status(), settings=a.settings, voices=a.voices.list(), brb=a.brb_state())
+    return ok(status=a.status(), settings=a.settings.masked(), voices=a.voices.list(), brb=a.brb_state())
 
 
 async def api_settings(state, request):
@@ -129,8 +129,8 @@ async def api_settings(state, request):
     if a.settings.get("muted") and not was_muted:
         # мьют: замолкаем сразу - текущая реплика и вся очередь
         a.clear()
-    a.broadcast({"type": "settings", "settings": a.settings})
-    return ok(settings=a.settings)
+    a.broadcast({"type": "settings", "settings": a.settings.masked()})
+    return ok(settings=a.settings.masked())
 
 
 async def api_connect(state, request):

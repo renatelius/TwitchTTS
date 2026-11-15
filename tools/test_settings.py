@@ -12,7 +12,7 @@ APP = ROOT / "app"
 if str(APP) not in sys.path:
     sys.path.insert(0, str(APP))
 
-from settings import DEFAULTS, READONLY, Settings  # noqa: E402
+from settings import DEFAULTS, MASK, READONLY, SECRET_KEYS, Settings  # noqa: E402
 
 FAILED = []
 
@@ -87,6 +87,26 @@ try:
     s = Settings(tmp / "u.json")
     s.apply({"неизвестный_ключ": 1})
     check("неизвестный ключ не добавлен", "неизвестный_ключ" not in s)
+
+    # секреты наружу не отдаются
+    s = Settings(tmp / "secret.json")
+    s.apply({"twitch_token": "oauth:abc", "twitch_client_id": "cid123"})
+    m = s.masked()
+    check("токен замаскирован", m["twitch_token"] == MASK, m["twitch_token"])
+    check("client id замаскирован", m["twitch_client_id"] == MASK, m["twitch_client_id"])
+    check("настоящий секрет не утёк", "oauth:abc" not in str(m))
+    check("маска не меняет оригинал", s["twitch_token"] == "oauth:abc", s["twitch_token"])
+    check("остальные настройки не тронуты", m["volume"] == s["volume"])
+    check("секреты перечислены", set(SECRET_KEYS) == {"twitch_token", "twitch_client_id"})
+    empty = Settings(tmp / "secret_empty.json")
+    check("пустой секрет остаётся пустым", empty.masked()["twitch_token"] == "",
+          repr(empty.masked()["twitch_token"]))
+    s.apply({"twitch_token": MASK})
+    check("маска не затирает секрет", s["twitch_token"] == "oauth:abc", s["twitch_token"])
+    s.apply({"twitch_client_id": MASK})
+    check("маска не затирает client id", s["twitch_client_id"] == "cid123", s["twitch_client_id"])
+    s.apply({"twitch_token": ""})
+    check("пустой секрет очищается", s["twitch_token"] == "", repr(s["twitch_token"]))
 
     # сохранение и чтение обратно
     save_path = tmp / "save.json"

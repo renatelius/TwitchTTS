@@ -554,8 +554,17 @@ $('settingsBtn').onclick = () => {
   $('s_rule_sub').value = rules.sub || 'ignore';
   $('s_rule_gift').value = rules.gift || 'ignore';
   $('s_rule_bits').value = rules.bits || 'ignore';
-  $('s_twitch_client_id').value = settings.twitch_client_id || '';
-  $('s_twitch_token').value = settings.twitch_token || '';
+  // секреты приходят замаскированными: маска в поле означает «секрет задан»,
+  // пустое поле — «не задан». На сервере маска не затирает настоящее значение.
+  const SECRET_MASK = '********';
+  const secretPh = {twitch_client_id: 'из консоли разработчика Twitch', twitch_token: 'токен из консоли разработчика'};
+  ['twitch_client_id', 'twitch_token'].forEach(k => {
+    const el = $('s_' + k), v = settings[k] || '';
+    el.value = v;
+    const masked = v === SECRET_MASK;
+    el.placeholder = masked ? 'сохранено — введите новое, чтобы заменить' : secretPh[k];
+    el.title = masked ? 'Сохранено. Введите новое значение, чтобы заменить.' : '';
+  });
   $('s_highlight_reward').value = settings.highlight_reward || '';
   $('s_speak_reward').value = settings.speak_reward || '';
   bools.forEach(k => $('s_' + k).checked = settings[k]);

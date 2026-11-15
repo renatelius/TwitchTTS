@@ -54,6 +54,10 @@ DEFAULTS = {
 # поля, которые нельзя менять из интерфейса
 READONLY = ("channel", "disabled_voices", "applio_path", "cosyvoice_path")
 
+# секреты: наружу отдаются замаскированными
+SECRET_KEYS = ("twitch_token", "twitch_client_id")
+MASK = "********"
+
 
 def load_json(path, default):
     try:
@@ -83,12 +87,27 @@ class Settings(dict):
         """Записывает настройки в файл."""
         save_json(self.path, self)
 
+    def masked(self):
+        """Копия настроек, где секреты замаскированы.
+
+        Пустое значение остаётся пустым: интерфейс должен видеть, задан ли
+        секрет. Маска означает "оставить как есть" - так открытая и сохранённая
+        форма настроек не затрёт настоящий токен.
+        """
+        out = dict(self)
+        for key in SECRET_KEYS:
+            if str(out.get(key) or ""):
+                out[key] = MASK
+        return out
+
     def apply(self, data):
         """Применяет правки из интерфейса: типы, диапазоны, запрещённые поля."""
         for key, default in self.defaults.items():
             if key not in data or key in READONLY:
                 continue
             val = data[key]
+            if key in SECRET_KEYS and val == MASK:
+                continue          # маска: секрет не меняем
             try:
                 if isinstance(default, bool):
                     val = bool(val)

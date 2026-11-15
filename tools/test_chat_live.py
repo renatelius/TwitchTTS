@@ -111,6 +111,52 @@ for cmd, word in (("!курс 100 usd", "USD"), ("!перевод hello world", 
         text = str(got.get("text") or "")
         check("ответ %s содержит %s" % (cmd.split()[0], word), word.lower() in text.lower(), text)
 
+# 4) секреты не отдаются наружу
+SETTINGS_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                             "data", "settings.json")
+
+
+def get_settings():
+    with urllib.request.urlopen(BASE + "/api/state", timeout=30) as resp:
+        return json.loads(resp.read().decode("utf-8"))["settings"]
+
+
+def post_settings(data):
+    req = urllib.request.Request(BASE + "/api/settings", data=json.dumps(data).encode("utf-8"),
+                                 headers={"Content-Type": "application/json"}, method="POST")
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        return json.loads(resp.read().decode("utf-8"))
+
+
+def stored_token():
+    """Что реально лежит в файле настроек (в API секрет замаскирован)."""
+    try:
+        with open(SETTINGS_FILE, encoding="utf-8") as f:
+            return json.load(f).get("twitch_token") or ""
+    except Exception:
+        return ""
+
+
+original_token = stored_token()
+SECRET = "проверка-секрета"
+try:
+    before = len(EVENTS)
+    post_settings({"twitch_token": SECRET})
+    st = get_settings()
+    check("токен не отдаётся в /api/state", SECRET not in json.dumps(st, ensure_ascii=False),
+          st.get("twitch_token"))
+    check("токен замаскирован в /api/state", st.get("twitch_token") == "********",
+          st.get("twitch_token"))
+    ev = wait_event(lambda e: e.get("type") == "settings", before)
+    check("в SSE секрет замаскирован",
+          ev is not None and SECRET not in json.dumps(ev, ensure_ascii=False))
+    post_settings({"twitch_token": "********"})
+    check("маска не затирает секрет", stored_token() == SECRET, stored_token())
+    post_settings({"twitch_token": ""})
+    check("пустой секрет очищается", stored_token() == "", repr(stored_token()))
+finally:
+    post_settings({"twitch_token": original_token})
+
 print("")
 print("Провалено: %d" % len(FAILED))
 sys.exit(1 if FAILED else 0)
