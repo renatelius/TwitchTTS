@@ -61,6 +61,7 @@
       <div class="kv"><span>Шаг A — правила чата</span><b>9faa05f</b></div>
       <div class="kv"><span>Шаг B — HTTP-слой</span><b>4f89273</b></div>
       <div class="kv"><span>Шаг D — настройки</span><b>1459ae8</b></div>
+      <div class="kv"><span>Шаг E — цикл импортов</span><b>bfcfbc1</b></div>
       <div class="kv"><span>Документация и ADR</span><b>8cdfc2c</b></div>
       <div class="kv"><span>Тест: мигающий аудит</span><b>dc145cd</b></div>
     </div>
@@ -74,7 +75,7 @@
       <div class="kv"><span>Слепок чата</span><b>47/47</b></div>
       <div class="kv"><span>Слепок HTTP</span><b>37 маршрутов / 25 запросов</b></div>
       <div class="kv"><span>Слепок настроек</span><b>26 случаев</b></div>
-      <div class="kv"><span>Наборов тестов</span><b>14 · провалов 0</b></div>
+      <div class="kv"><span>Наборов тестов</span><b>15 · провалов 0</b></div>
     </div>
   </div>
 
@@ -160,6 +161,8 @@ graph LR
   main.py         960  состояние, очередь, синтез, Twitch API, сборка приложения
   api.py          633  HTTP: страницы, /api/*, SSE /events, отдача /audio      [новый]
   settings.py     120  настройки: defaults, загрузка, нормализация            [новый]
+  emote_text.py   190  разбор ремарок и вокализация (текст, без звука)        [новый]
+  textkeys.py      8  сравнение имён: norm_key                              [новый]
   chat_rules.py   230  чистые правила чата: decide(msg, ctx) -> Decision       [новый]
   paths.py         12  общие пути: DATA, CACHE, TMP, WEB                      [новый]
   engine.py       437  XTTS v2: загрузка, слепки голоса, синтез
@@ -178,7 +181,7 @@ graph LR
   <div class="grid g2">
     <div class="card"><h4>Найдено при аудите</h4>
       <ul>
-        <li><span class="tag t-bad">цикл</span> <code>textproc ↔ emotes</code> — взаимные импорты, разорвать на шаге E</li>
+        <li><span class="tag t-ok">цикл</span> <code>textproc ↔ emotes</code> — разорван: <code>emote_text</code> и <code>textkeys</code> (шаг E)</li>
         <li><span class="tag t-warn">глобалы</span> только константы и кэши курса/перевода в <code>features</code></li>
         <li><span class="tag t-warn">дубль</span> <code>MAX_UPLOAD</code> объявлен в <code>paths.py</code> и <code>rvc_train.py</code></li>
         <li><span class="tag t-ok">логгер</span> в <code>main.py</code> отсутствовал — <code>log.exception()</code> ронял очередь при ошибке синтеза</li>
@@ -286,7 +289,7 @@ docs/               архитектура, контекст, ADR</pre>
     <tr><td>A</td><td>Правила чата → <code>app/chat_rules.py</code></td><td><code>decide(msg, ctx)</code></td><td>слепок 47 кейсов</td><td><span class="tag t-ok">готово</span></td></tr>
     <tr><td>B</td><td>HTTP-слой → <code>app/api.py</code>, <code>app/paths.py</code></td><td><code>build_routes(state)</code></td><td>слепок 37 маршрутов / 25 запросов</td><td><span class="tag t-ok">готово</span></td></tr>
     <tr><td>D</td><td>Настройки → <code>app/settings.py</code></td><td><code>Settings</code>, <code>apply(data)</code></td><td>слепок 26 случаев + юнит-тесты</td><td><span class="tag t-ok">готово</span></td></tr>
-    <tr><td>E</td><td>Разрыв цикла <code>textproc ↔ emotes</code></td><td>общие утилиты</td><td>тесты + граф импортов</td><td><span class="tag t-warn">в работе</span></td></tr>
+    <tr><td>E</td><td>Разрыв цикла <code>textproc ↔ emotes</code></td><td><code>emote_text</code>, <code>textkeys</code></td><td>граф импортов + живой чат</td><td><span class="tag t-ok">готово</span></td></tr>
     <tr><td>F</td><td>Очередь → <code>app/queue.py</code></td><td><code>enqueue/skip/clear</code></td><td>слепок очереди + живой чат</td><td><span class="tag t-acc">далее</span></td></tr>
     <tr><td>G</td><td>Синтез → <code>app/synthesis.py</code></td><td><code>synthesize(job)</code></td><td>контроль качества A/B</td><td><span class="tag t-acc">далее</span></td></tr>
     <tr><td>H</td><td>Производительность и GPU</td><td>—</td><td>baseline до/после, VRAM, качество</td><td><span class="tag t-acc">отдельный этап</span></td></tr>
@@ -298,14 +301,14 @@ docs/               архитектура, контекст, ADR</pre>
     <ul style="margin:0">
       <li>Функциональность, API-контракты и настройки совместимы с текущей версией.</li>
       <li>Нет циклических импортов, глобального состояния и дублирования путей.</li>
-      <li>14 наборов тестов + 3 золотых слепка зелёные на каждом шаге.</li>
+      <li>15 наборов тестов + 3 золотых слепка зелёные на каждом шаге.</li>
       <li>Качество голоса подтверждено контрольным набором (до/после).</li>
       <li>Скорость и VRAM измерены до и после — без ухудшения качества.</li>
       <li>Документация соответствует коду; на каждое существенное решение — ADR.</li>
     </ul>
   </div>
 
-  <footer>Документ отражает состояние репозитория на 15.11.2026: коммиты <code>9faa05f</code>, <code>4f89273</code>, <code>dc145cd</code>, <code>1459ae8</code>, <code>8cdfc2c</code>.
+  <footer>Документ отражает состояние репозитория на 15.11.2026: коммиты <code>9faa05f</code>, <code>4f89273</code>, <code>dc145cd</code>, <code>1459ae8</code>, <code>8cdfc2c</code>, <code>bfcfbc1</code>.
   Все цифры — результат замеров на этой машине, а не оценки.</footer>
 </div>
 <script>
