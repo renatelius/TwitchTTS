@@ -32,6 +32,7 @@ venv\Scripts\python.exe tools\test_chat_rules.py     # таблица прави
 venv\Scripts\python.exe tools\test_settings.py       # нормализация настроек
 venv\Scripts\python.exe tools\test_api.py            # маршруты и связность модулей
 venv\Scripts\python.exe tools\test_imports.py        # циклы импортов и неопределённые имена
+venv\Scripts\python.exe tools\test_queue.py           # очередь озвучки (без сервера)
 venv\Scripts\python.exe tools\test_emotes.py         # эмоции и разбор текста
 venv\Scripts\python.exe tools\test_langs.py          # языки
 venv\Scripts\python.exe tools\audit_emotes.py        # сквозная проверка эмоций (нужен сервер)
@@ -62,15 +63,22 @@ venv\Scripts\python.exe app\main.py --no-browser
 venv\Scripts\python.exe tools\golden_chat.py --out tools\golden_chat.json
 venv\Scripts\python.exe tools\golden_api.py --base http://127.0.0.1:8769 --out tools\golden_api.json
 venv\Scripts\python.exe tools\golden_settings.py --base http://127.0.0.1:8769 --out tools\golden_settings.json
+venv\Scripts\python.exe tools\golden_queue.py --base http://127.0.0.1:8769 --out tools\golden_queue.json
 
 # проверить новый код
 venv\Scripts\python.exe tools\golden_api.py --base http://127.0.0.1:8769 --check tools\golden_api.json
 venv\Scripts\python.exe tools\golden_settings.py --base http://127.0.0.1:8769 --check tools\golden_settings.json
+venv\Scripts\python.exe tools\golden_queue.py --base http://127.0.0.1:8769 --check tools\golden_queue.json
 ```
 
 Если поведение меняют намеренно — слепок переснимают **отдельным коммитом**
 с объяснением, что изменилось. Молчаливый пересчёт слепка означает спрятанную
 регрессию.
+
+`golden_queue.py` сначала прогревает движок: в режиме заглушки XTTS настоящий,
+а CosyVoice — нет, поэтому первый синтез поднимает его воркер и занимает
+десятки секунд. `golden_api.py` ждёт пустой очереди и возвращает настройки
+как были — иначе слепок затирал бы громкость и скорость пользователя.
 
 ## Контроль качества голоса
 
